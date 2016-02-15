@@ -58,7 +58,7 @@ func (wsh wsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-var addr = flag.String("addr", "localhost:9000", "http service address")
+var addr = flag.String("addr", ":50000", "http service address")
 
 func main() {
 	flag.Parse()
