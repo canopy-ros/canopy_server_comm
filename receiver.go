@@ -14,6 +14,7 @@ type receiver struct {
 	process chan []byte
 	h *hub
 	name string
+	private_key string
 }
 
 type message struct {
@@ -40,7 +41,7 @@ func (r *receiver) processor() {
 		//log.Println("To:", m.To)
 		for _, to := range m.To {
 			if to == "*" {
-				for name, sender := range r.h.senderMap {
+				for name, sender := range r.h.senderMap[r.private_key] {
 					if name != m.From {
 						select {
 						case sender.send <- msg:
@@ -50,7 +51,7 @@ func (r *receiver) processor() {
 				}
 				break
 			}
-			if sender, ok := r.h.senderMap[to]; ok {
+			if sender, ok := r.h.senderMap[r.private_key][to]; ok {
 				select {
 				case sender.send <- msg:
 				default:
@@ -64,7 +65,7 @@ func (r *receiver) reader() {
 	for {
 		_, message, err := r.ws.ReadMessage()
 		if err != nil {
-    			log.Println("ReadError:", err)
+    			log.Printf("[%s] ReadError: %s", r.name, err)
 			break
 		}
 		select {
