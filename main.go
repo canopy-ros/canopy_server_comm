@@ -61,6 +61,7 @@ func (wsh wsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			close(snd.send)
 		}()
 		snd.writer()
+		log.Println("Disconnected from: %s", (*r).RequestURI)
 	} else {
 		rcv := &receiver{process: make(chan []byte, 2), ws: ws, h: wsh.h, name: (*r).RequestURI, private_key: split[1]}
 		rcv.h.receivers[rcv] = true
@@ -70,12 +71,14 @@ func (wsh wsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}()
 		go rcv.processor()
 		rcv.reader()
+		log.Println("Disconnected from: %s", (*r).RequestURI)
 	}
 }
 
 var addr = flag.String("addr", ":50000", "http service address")
 
 func main() {
+	log.Println("ROSCloud server started.")
 	flag.Parse()
 	h := newHub()
 	http.Handle("/", wsHandler{h: h})
