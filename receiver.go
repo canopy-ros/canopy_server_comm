@@ -40,23 +40,25 @@ func (r *receiver) processor() {
 		json.Unmarshal(decompressed[4:], &m)
 		//log.Println("To:", m.To)
 		for _, to := range m.To {
+			list := make([]string, 0)
 			if to == "*" {
 				for name, sender := range r.h.senderMap[r.private_key] {
 					if name != m.From {
+						list = append(list, name)
 						select {
 						case sender.send <- msg:
 						default:
 						}
 					}
 				}
-				break
-			}
-			if sender, ok := r.h.senderMap[r.private_key][to]; ok {
+			} else if sender, ok := r.h.senderMap[r.private_key][to]; ok {
+				list = append(list, to)
 				select {
 				case sender.send <- msg:
 				default:
 				}
 			}
+			r.h.topicReceivers[r] = list
 		}
 	}
 }
