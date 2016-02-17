@@ -39,7 +39,7 @@ type wsHandler struct {
 }
 
 func (wsh wsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if (*r).RequestURI == "/graph" {
+	if (*r).RequestURI[:len("/graph")] == "/graph" {
 		return
 	}
 	for rcv, _ := range wsh.h.receivers {
