@@ -15,6 +15,8 @@ type receiver struct {
 	h *hub
 	name string
 	private_key string
+	to []string
+	msg_type string
 }
 
 type message struct {
@@ -39,6 +41,7 @@ func (r *receiver) processor() {
 		var m message
 		json.Unmarshal(decompressed[4:], &m)
 		//log.Println("To:", m.To)
+		r.msg_type = m.Type
 		for _, to := range m.To {
 			list := make([]string, 0)
 			if to == "*" {
@@ -58,7 +61,7 @@ func (r *receiver) processor() {
 				default:
 				}
 			}
-			r.h.topicReceivers[r] = list
+			r.to = list
 		}
 	}
 }

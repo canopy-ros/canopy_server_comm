@@ -20,7 +20,6 @@ type hub struct {
 	receivers map[*receiver]bool
 	senders map[*sender]bool
 	senderMap map[string]map[string]*sender
-	topicReceivers map[*receiver][]string
 }
 
 func newHub() *hub {
@@ -28,7 +27,6 @@ func newHub() *hub {
 		receivers: make(map[*receiver]bool),
 		senders: make(map[*sender]bool),
 		senderMap: make(map[string]map[string]*sender),
-		topicReceivers: make(map[*receiver][]string),
 	}
 }
 
@@ -39,7 +37,7 @@ type wsHandler struct {
 }
 
 func (wsh wsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if (*r).RequestURI[:len("/graph")] == "/graph" {
+	if (*r).RequestURI[:len("/graph")] == "/graph" || (*r).RequestURI[:len("/favicon")] == "/favicon" {
 		return
 	}
 	for rcv, _ := range wsh.h.receivers {
@@ -111,9 +109,12 @@ func (wsh graphHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
 	edges := ""
 	for rcv, _ := range wsh.h.receivers {
 		split := strings.Split(rcv.name, "/")
+		if split[len(split) - 1] == "description" {
+			continue
+		}
 		if split[1] == private_key {
-			for _, name := range wsh.h.topicReceivers[rcv] {
-				edges += "{from: '" + split[2] + "', to: '" + name + "', arrows: 'to', font: {align: 'top'}, label: '" + rcv.name[len("/" + private_key):] + "'},"
+			for _, name := range rcv.to {
+				edges += "{from: '" + split[2] + "', to: '" + name + "', arrows: {to: {enabled: true, scaleFactor: 0.5}}, font: {align: 'top'}, label: '" + rcv.name[len("/" + private_key):] + "', title: '" + rcv.msg_type + "'},"
 			}
 		}
 	}
