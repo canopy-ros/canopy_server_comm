@@ -129,8 +129,8 @@ func (wsh graphHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
 	}
 	nodes := ""
 	if sMap, ok := wsh.h.senderMap[private_key]; ok {
-		for name, _ := range sMap {
-			nodes += "{\"id\": \"" + name + "\", \"label\": \"" + name + "\", \"mass\": 8, \"group\": \"" + name + "\"},"
+		for name, sender := range sMap {
+			nodes += "{\"id\": \"" + name + "\", \"label\": \"" + name + "\", \"mass\": 8, \"group\": \"" + name + "\", \"title\": \"" + sender.description + "\"},"
 		}
 	} else {
 		return

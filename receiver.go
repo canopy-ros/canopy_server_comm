@@ -8,6 +8,8 @@ import (
 	"compress/zlib"
 	"encoding/json"
 	"time"
+	"strings"
+	"regexp"
 )
 
 type receiver struct {
@@ -28,6 +30,11 @@ type message struct {
 	Topic string
 	Type string
 	Stamp float64
+	Msg json.RawMessage
+}
+
+type description struct {
+	Data string
 }
 
 func (r *receiver) processor() {
@@ -46,23 +53,34 @@ func (r *receiver) processor() {
 		json.Unmarshal(decompressed[4:], &m)
 		//log.Println("To:", m.To)
 		r.msg_type = m.Type
+		split := strings.Split(m.Topic, "/")
+		if (split[len(split) - 1] == "description") {
+			var d description
+			json.Unmarshal(m.Msg, &d)
+			if sender, ok := r.h.senderMap[r.private_key][split[1]]; ok {
+				sender.description = d.Data
+			}
+		}
 		for _, to := range m.To {
 			list := make([]string, 0)
-			if to == "*" {
-				for name, sender := range r.h.senderMap[r.private_key] {
-					if name != m.From {
-						list = append(list, name)
-						select {
-						case sender.send <- snd:
-						default:
-						}
-					}
-				}
-			} else if sender, ok := r.h.senderMap[r.private_key][to]; ok {
+			if sender, ok := r.h.senderMap[r.private_key][to]; ok {
 				list = append(list, to)
 				select {
 				case sender.send <- snd:
 				default:
+				}
+			} else { // Regex
+				for name, sender := range r.h.senderMap[r.private_key] {
+					if name != m.From {
+						match, _ := regexp.MatchString(to, name)
+						if match {
+							list = append(list, name)
+							select {
+							case sender.send <- snd:
+							default:
+							}
+						}
+					}
 				}
 			}
 			r.to = list

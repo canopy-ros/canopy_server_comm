@@ -16,6 +16,7 @@ type sender struct {
 	send chan sendChannel
 	name string
 	private_key string
+	description string
 }
 
 func (s *sender) heartbeat(beat chan bool, stop chan bool) {
