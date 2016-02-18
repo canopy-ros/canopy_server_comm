@@ -7,6 +7,7 @@ import (
 	"io"
 	"compress/zlib"
 	"encoding/json"
+	"time"
 )
 
 type receiver struct {
@@ -17,6 +18,8 @@ type receiver struct {
 	private_key string
 	to []string
 	msg_type string
+	rcvFreq float32
+	sendFreq map[*sender]float32
 }
 
 type message struct {
@@ -30,6 +33,7 @@ type message struct {
 func (r *receiver) processor() {
 	for {
 		msg := <- r.process
+		snd := sendChannel{r: r, data: msg}
 		rdr, err := zlib.NewReader(bytes.NewBuffer(msg))
 		if err != nil {
 			break;
@@ -49,7 +53,7 @@ func (r *receiver) processor() {
 					if name != m.From {
 						list = append(list, name)
 						select {
-						case sender.send <- msg:
+						case sender.send <- snd:
 						default:
 						}
 					}
@@ -57,7 +61,7 @@ func (r *receiver) processor() {
 			} else if sender, ok := r.h.senderMap[r.private_key][to]; ok {
 				list = append(list, to)
 				select {
-				case sender.send <- msg:
+				case sender.send <- snd:
 				default:
 				}
 			}
@@ -67,6 +71,8 @@ func (r *receiver) processor() {
 }
 
 func (r *receiver) reader() {
+	count := 0
+	last_time := time.Now()
 	for {
 		_, message, err := r.ws.ReadMessage()
 		if err != nil {
@@ -82,6 +88,12 @@ func (r *receiver) reader() {
 		err = r.ws.WriteMessage(websocket.BinaryMessage, msg)
 		if err != nil {
 			break
+		}
+		count += 1
+		if count == 20 {
+			r.rcvFreq = 20.0 * 1e9 / float32((time.Now().Sub(last_time)))
+			last_time = time.Now()
+			count = 0
 		}
 	}
 	r.ws.Close()
