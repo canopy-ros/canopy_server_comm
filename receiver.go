@@ -10,12 +10,15 @@ import (
 	"time"
 	"strings"
 	"regexp"
+	"fmt"
+	rethink "github.com/dancannon/gorethink"
 )
 
 type receiver struct {
 	ws *websocket.Conn
 	process chan []byte
 	h *hub
+	s *rethink.Session
 	name string
 	private_key string
 	to []string
@@ -37,6 +40,9 @@ type description struct {
 	Data string
 }
 
+// processor from receiver decompresses the packet and unmarshals the JSON
+// to retrieve destination information. It then forwards the original packet
+// to the desired client senders.
 func (r *receiver) processor() {
 	for {
 		msg := <- r.process
@@ -85,9 +91,20 @@ func (r *receiver) processor() {
 			}
 			r.to = list
 		}
+		_, err = rethink.DB("test").Table("test").Get(2).Update(
+			map[string]interface{}{
+            "title":   "Lorem ipsum",
+		    "content": "Dolor sit amet",
+		}).RunWrite(r.s)
+		if err != nil {
+		    fmt.Print(err)
+		    return
+		}
 	}
 }
 
+// reader from receiver continually polls the socket for new packets,
+// and then sends them to be processed. It also calculates read frequencies.
 func (r *receiver) reader() {
 	count := 0
 	last_time := time.Now()

@@ -19,6 +19,8 @@ type sender struct {
 	description string
 }
 
+// heartbeat from sender sends a heartbeat packet to the client every second,
+// when no regular packets are being sent.
 func (s *sender) heartbeat(beat chan bool, stop chan bool) {
 	for {
 		exit := false
@@ -36,6 +38,8 @@ func (s *sender) heartbeat(beat chan bool, stop chan bool) {
 	}
 }
 
+// writer from sender writes packets to the receiving client.
+// It also calculates write frequencies.
 func (s *sender) writer() {
 	hbeat := make(chan bool)
 	stop := make(chan bool)
@@ -58,7 +62,8 @@ func (s *sender) writer() {
 		}
 		count[message.r] += 1
 		if count[message.r] >= 20 {
-			message.r.sendFreq[s] = 20.0 * 1e9 / float32((time.Now().Sub(last_time[message.r])))
+			message.r.sendFreq[s] = 20.0 * 1e9 / float32(
+				(time.Now().Sub(last_time[message.r])))
 			last_time[message.r] = time.Now()
 			count[message.r] = 0
                 }
