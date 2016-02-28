@@ -12,6 +12,7 @@ import (
     "path/filepath"
     "fmt"
     "encoding/json"
+    "github.com/garyburd/redigo/redis"
 )
 
 type Page struct {
@@ -55,6 +56,7 @@ type hub struct {
     receivers map[*receiver]bool
     senders map[*sender]bool
     senderMap map[string]map[string]*sender
+    dbw dbwriter
 }
 
 // newHub creates a new hub object.
@@ -70,6 +72,7 @@ var upgrader = &websocket.Upgrader{ReadBufferSize: 1024, WriteBufferSize: 1024}
 
 type wsHandler struct {
     h *hub
+    c *redis.Conn
 }
 
 // ServeHTTP from wsHandler responds to connections from clients.
@@ -96,13 +99,15 @@ func (wsh wsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
         return
     }
     log.Printf("Connected to: %s", (*r).RequestURI)
+    wsh.h.dbw.write(true, "SADD", "clients:list", (*r).RequestURI)
     split := strings.Split((*r).RequestURI, "/")
     if _, ok := wsh.h.senderMap[split[1]]; !ok {
         wsh.h.senderMap[split[1]] = make(map[string]*sender)
     }
     if strings.HasSuffix((*r).RequestURI, "receiving") {
-        snd := &sender{send: make(chan sendChannel, 2), ws: ws,
-            name: (*r).RequestURI, private_key: split[1]}
+        snd := &sender{send: make(chan sendChannel, 2), ws: ws, h: wsh.h,
+        redisconn: wsh.c, name: (*r).RequestURI, private_key: split[1],
+        shortname: split[2], freqs: make(map[*receiver]float32)}
         wsh.h.senders[snd] = true
         wsh.h.senderMap[split[1]][split[2]] = snd
         defer func() {
@@ -112,10 +117,12 @@ func (wsh wsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
         }()
         snd.writer()
         log.Printf("Disconnected from: %s", (*r).RequestURI)
+        wsh.h.dbw.write(true, "SREM", "clients:list", (*r).RequestURI)
+        wsh.h.dbw.write(true, "DEL", "clients:" + (*r).RequestURI)
     } else {
         rcv := &receiver{process: make(chan []byte, 2), ws: ws, h: wsh.h,
-            name: (*r).RequestURI, private_key: split[1],
-            sendFreq: make(map[*sender]float32)}
+            redisconn: wsh.c, name: (*r).RequestURI, private_key: split[1],
+            shortname: split[2]}
         rcv.h.receivers[rcv] = true
         defer func() {
             delete(rcv.h.receivers, rcv)
@@ -124,6 +131,8 @@ func (wsh wsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
         go rcv.processor()
         rcv.reader()
         log.Printf("Disconnected from: %s", (*r).RequestURI)
+        wsh.h.dbw.write(true, "SREM", "clients:list", (*r).RequestURI)
+        wsh.h.dbw.write(true, "DEL", "clients:" + (*r).RequestURI)
     }
 }
 
@@ -152,7 +161,6 @@ func (wsh graphHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
                 split := strings.Split(rcv.name, "/")
                     if split[len(split) - 1] == "description" {
                         continue
-                    
                 }
                 if split[1] == private_key {
                     subname := rcv.name[len("/" + private_key):]
@@ -164,8 +172,8 @@ func (wsh graphHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
                     for _, name := range rcv.to {
                         edge = Edge {
                             ID: subname + " " + name,
-                            Label: fmt.Sprintf("%.2f",rcv.sendFreq[
-                                wsh.h.senderMap[private_key][name]]) + " Hz",
+                            Label: fmt.Sprintf("%.2f", wsh.h.senderMap[
+                                private_key][name].freqs[rcv]) + " Hz",
                         }
                         edges = append(edges, edge)
                     }
@@ -264,8 +272,8 @@ func (wsh graphHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
                     }{
                         Align: "top",
                     },
-                    Label: fmt.Sprintf("%.2f", rcv.sendFreq[wsh.h.senderMap[
-                        private_key][name]]) + " Hz",
+                    Label: fmt.Sprintf("%.2f", wsh.h.senderMap[
+                        private_key][name].freqs[rcv]) + " Hz",
                     Group: name,
                     Color: struct {
                         Inherit string `json:"inherit"`
@@ -297,14 +305,26 @@ var addr = flag.String("addr", ":50000", "http service address")
 var assets = flag.String("assets", defaultAssetPath(), "path to assets")
 
 func main() {
-    log.Println("ROSCloud server started.")
+    log.Println("ROSCloud communication server started.")
     flag.Parse()
     fs := http.FileServer(http.Dir("graph/js"))
     http.Handle("/graph/js/", http.StripPrefix("/graph/js/", fs))
     h := newHub()
     http.Handle("/graph/", graphHandler{h: h})
-    http.Handle("/", wsHandler{h: h})
-    if err := http.ListenAndServe(*addr, nil); err != nil {
+    c, err := redis.Dial("tcp", ":6379")
+    if err != nil {
+        panic(err)
+    }
+    c.Do("DEL", "clients:list")
+    defer func() {
+        c.Do("DEL", "clients:list")
+        c.Close()
+    }()
+    dbw := dbwriter{redisconn: &c, commChannel: make(chan command, 2)}
+    h.dbw = dbw
+    go dbw.writer()
+    http.Handle("/", wsHandler{h: h, c: &c})
+    if err = http.ListenAndServe(*addr, nil); err != nil {
         log.Fatal("ListenAndServe:", err)
     }
 }

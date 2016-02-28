@@ -11,18 +11,20 @@ import (
     "strings"
     "regexp"
     "fmt"
+    "github.com/garyburd/redigo/redis"
 )
 
 type receiver struct {
     ws *websocket.Conn
     process chan []byte
     h *hub
+    redisconn *redis.Conn
     name string
+    shortname string
     private_key string
     to []string
     msg_type string
     rcvFreq float32
-    sendFreq map[*sender]float32
 }
 
 type message struct {
@@ -32,6 +34,7 @@ type message struct {
     Type string
     Stamp float64
     Msg json.RawMessage
+    Private_key string
 }
 
 type description struct {
@@ -42,6 +45,7 @@ type description struct {
 // to retrieve destination information. It then forwards the original packet
 // to the desired client senders.
 func (r *receiver) processor() {
+    lastTime := 0.0
     for {
         msg := <- r.process
         snd := sendChannel{r: r, data: msg}
@@ -56,6 +60,15 @@ func (r *receiver) processor() {
         var m message
         json.Unmarshal(decompressed[4:], &m)
         //log.Println("To:", m.To)
+        // Ensure message is coming from correct client.
+        if (m.From != r.shortname || m.Private_key != r.private_key) {
+            return
+        }
+        // Ensure messages are sent in order.
+        if (m.Stamp < lastTime) {
+            return
+        }
+        lastTime = m.Stamp
         r.msg_type = m.Type
         split := strings.Split(m.Topic, "/")
         if (split[len(split) - 1] == "description") {
@@ -65,8 +78,9 @@ func (r *receiver) processor() {
                 sender.description = d.Data
             }
         }
+        m.To = append(m.To, "roscloud_server")
+        list := make([]string, 0)
         for _, to := range m.To {
-            list := make([]string, 0)
             if sender, ok := r.h.senderMap[r.private_key][to]; ok {
                 list = append(list, to)
                 select {
@@ -87,8 +101,11 @@ func (r *receiver) processor() {
                     }
                 }
             }
-            r.to = list
         }
+        r.to = list
+        r.h.dbw.write(false, "HMSET", "clients:" + r.name, "name", m.From, "to",
+            r.to, "topic", m.Topic, "stamp", m.Stamp,
+            "private_key", m.Private_key, "type", m.Type, "data", msg)
         if err != nil {
             fmt.Print(err)
             return
@@ -123,6 +140,7 @@ func (r *receiver) reader() {
             last_time = time.Now()
             count = 0
         }
+        r.h.dbw.write(false, "HSET", "clients:" + r.name, "freq", r.rcvFreq)
     }
     r.ws.Close()
 }
