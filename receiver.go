@@ -10,7 +10,6 @@ import (
     "time"
     "strings"
     "regexp"
-    "fmt"
     "github.com/garyburd/redigo/redis"
 )
 
@@ -82,20 +81,38 @@ func (r *receiver) processor() {
         list := make([]string, 0)
         for _, to := range m.To {
             if sender, ok := r.h.senderMap[r.private_key][to]; ok {
-                list = append(list, to)
-                select {
-                case sender.send <- snd:
-                default:
+                exists := false
+                for _, check := range list {
+                    if check == to {
+                        exists = true
+                        break
+                    }
+                }
+                if !exists {
+                    list = append(list, to)
+                    select {
+                    case sender.send <- snd:
+                    default:
+                    }
                 }
             } else { // Regex
                 for name, sender := range r.h.senderMap[r.private_key] {
                     if name != m.From {
                         match, _ := regexp.MatchString(to, name)
                         if match {
-                            list = append(list, name)
-                            select {
-                            case sender.send <- snd:
-                            default:
+                            exists := false
+                            for _, check := range list {
+                                if check == name {
+                                    exists = true
+                                    break
+                                }
+                            }
+                            if !exists {
+                                list = append(list, name)
+                                select {
+                                case sender.send <- snd:
+                                default:
+                                }
                             }
                         }
                     }
@@ -103,13 +120,15 @@ func (r *receiver) processor() {
             }
         }
         r.to = list
-        r.h.dbw.write(false, "HMSET", "clients:" + r.name, "name", m.From, "to",
-            r.to, "topic", m.Topic, "stamp", m.Stamp,
-            "private_key", m.Private_key, "type", m.Type, "data", msg)
-        if err != nil {
-            fmt.Print(err)
-            return
-        }
+        r.h.dbw.write(false, "SET", "clients:" + r.name + ":to",
+            strings.Join(r.to, " "))
+        r.h.dbw.write(false, "SET", "clients:" + r.name + ":from", m.From)
+        r.h.dbw.write(false, "SET", "clients:" + r.name + ":topic", m.Topic)
+        r.h.dbw.write(false, "SET", "clients:" + r.name + ":type", m.Type)
+        r.h.dbw.write(false, "SET", "clients:" + r.name + ":stamp", m.Stamp)
+        r.h.dbw.write(false, "SET", "clients:" + r.name + ":msg", m.Msg)
+        r.h.dbw.write(false, "SET", "clients:" + r.name + ":private_key",
+            m.Private_key)
     }
 }
 
@@ -140,7 +159,7 @@ func (r *receiver) reader() {
             last_time = time.Now()
             count = 0
         }
-        r.h.dbw.write(false, "HSET", "clients:" + r.name, "freq", r.rcvFreq)
+        r.h.dbw.write(false, "SET", "clients:" + r.name + ":freq", r.rcvFreq)
     }
     r.ws.Close()
 }

@@ -118,7 +118,13 @@ func (wsh wsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
         snd.writer()
         log.Printf("Disconnected from: %s", (*r).RequestURI)
         wsh.h.dbw.write(true, "SREM", "clients:list", (*r).RequestURI)
-        wsh.h.dbw.write(true, "DEL", "clients:" + (*r).RequestURI)
+        wsh.h.dbw.write(true, "DEL", "clients:" + (*r).RequestURI +
+            ":name", "clients:" + (*r).RequestURI + ":private_key",
+            "clients:" + (*r).RequestURI + ":description")
+        for key, _ := range snd.freqs {
+            wsh.h.dbw.write(true, "DEL", "clients:" + (*r).RequestURI +
+            ":freq:" + key.name[len("/" + key.private_key):])
+        }
     } else {
         rcv := &receiver{process: make(chan []byte, 2), ws: ws, h: wsh.h,
             redisconn: wsh.c, name: (*r).RequestURI, private_key: split[1],
@@ -132,7 +138,13 @@ func (wsh wsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
         rcv.reader()
         log.Printf("Disconnected from: %s", (*r).RequestURI)
         wsh.h.dbw.write(true, "SREM", "clients:list", (*r).RequestURI)
-        wsh.h.dbw.write(true, "DEL", "clients:" + (*r).RequestURI)
+        wsh.h.dbw.write(true, "DEL", "clients:" + (*r).RequestURI +
+            ":to", "clients:" + (*r).RequestURI + ":from",
+            "clients:" + (*r).RequestURI + ":topic", "clients:" +
+            (*r).RequestURI + ":type", "clients:" + (*r).RequestURI +
+            ":stamp", "clients:" + (*r).RequestURI + ":msg",
+            "clients:" + (*r).RequestURI + ":private_key", "clients:" +
+            (*r).RequestURI + ":freq")
     }
 }
 

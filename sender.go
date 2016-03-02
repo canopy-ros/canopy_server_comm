@@ -24,6 +24,13 @@ type sender struct {
     freqs map[*receiver]float32
 }
 
+type senderMessage struct {
+    Private_key string
+    Description string
+    Name string
+    Freqs map[string]float32
+}
+
 // heartbeat from sender sends a heartbeat packet to the client every second,
 // when no regular packets are being sent.
 func (s *sender) heartbeat(beat chan bool, stop chan bool) {
@@ -51,6 +58,12 @@ func (s *sender) writer() {
     go s.heartbeat(hbeat, stop)
     count := make(map[*receiver]int32)
     last_time := make(map[*receiver]time.Time)
+    s.h.dbw.write(false, "SET", "clients:" + s.name + ":private_key",
+        s.private_key)
+    s.h.dbw.write(false, "SET", "clients:" + s.name + ":description",
+        s.description)
+    s.h.dbw.write(false, "SET", "clients:" + s.name + ":name",
+        s.shortname)
     for message := range s.send {
         select {
         case hbeat <- true:
@@ -72,11 +85,15 @@ func (s *sender) writer() {
             last_time[message.r] = time.Now()
             count[message.r] = 0
         }
-        s.h.dbw.write(false, "HMSET", "clients:" + s.name, "private_key", s.private_key,
-            "description", s.description, "name", s.shortname)
+        s.h.dbw.write(false, "SET", "clients:" + s.name + ":private_key",
+            s.private_key)
+        s.h.dbw.write(false, "SET", "clients:" + s.name + ":description",
+            s.description)
+        s.h.dbw.write(false, "SET", "clients:" + s.name + ":name",
+            s.shortname)
         for key, value := range s.freqs {
-            s.h.dbw.write(false, "HSET", "clients:" + s.name, "freq:" + key.name,
-                value)
+            s.h.dbw.write(false, "SET", "clients:" + s.name + ":freq:" +
+            key.name[len("/" + key.private_key):], value)
         }
     }
     stop <- true
