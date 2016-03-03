@@ -1,2 +1,2 @@
-# roscloud_server_comm
-Client communication server for roscloud
+# canopy_server_comm
+Client communication server for Canopy
