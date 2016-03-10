@@ -77,7 +77,11 @@ func (r *receiver) processor() {
                 sender.description = d.Data
             }
         }
-        m.To = append(m.To, "roscloud_server")
+        for name, _ := range r.h.senderMap[r.private_key] {
+            if strings.HasPrefix(name, "canopy_leaflet_") {
+                m.To = append(m.To, name)
+            }
+        }
         list := make([]string, 0)
         for _, to := range m.To {
             if sender, ok := r.h.senderMap[r.private_key][to]; ok {
