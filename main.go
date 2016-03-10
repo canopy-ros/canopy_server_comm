@@ -149,7 +149,7 @@ func (wsh wsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func defaultAssetPath() string {
-    p, err := build.Default.Import("github.com/roscloud/roscloud_server", "",
+    p, err := build.Default.Import("github.com/canopy-ros/canopy_server_comm", "",
         build.FindOnly)
     if err != nil {
         return "."
@@ -317,7 +317,7 @@ var addr = flag.String("addr", ":50000", "http service address")
 var assets = flag.String("assets", defaultAssetPath(), "path to assets")
 
 func main() {
-    log.Println("ROSCloud communication server started.")
+    log.Println("Canopy communication server started.")
     flag.Parse()
     fs := http.FileServer(http.Dir("graph/js"))
     http.Handle("/graph/js/", http.StripPrefix("/graph/js/", fs))
