@@ -81,18 +81,18 @@ func (wsh wsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
         :len("/favicon")] == "/favicon" {
         return
     }
-    for rcv, _ := range wsh.h.receivers {
-        if rcv.name == (*r).RequestURI {
-            log.Printf("Already connected to: %s", (*r).RequestURI)
-            return
-        }
-    }
-    for snd, _ := range wsh.h.senders {
-        if snd.name == (*r).RequestURI {
-            log.Printf("Already connected to: %s", (*r).RequestURI)
-            return
-        }
-    }
+    // for rcv, _ := range wsh.h.receivers {
+    //     if rcv.name == (*r).RequestURI {
+    //         log.Printf("Already connected to: %s", (*r).RequestURI)
+    //         return
+    //     }
+    // }
+    // for snd, _ := range wsh.h.senders {
+    //     if snd.name == (*r).RequestURI {
+    //         log.Printf("Already connected to: %s", (*r).RequestURI)
+    //         return
+    //     }
+    // }
     ws, err := upgrader.Upgrade(w, r, nil)
     if err != nil {
         log.Println("ConnectionError:", err)
