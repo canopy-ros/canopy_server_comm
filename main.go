@@ -316,14 +316,12 @@ var assets = flag.String("assets", defaultAssetPath(), "path to assets")
 
 func main() {
 	viper.AddConfigPath(".")
+	viper.AddConfigPath("/etc/canopy/")
 	viper.SetConfigName("config")
 	viper.SetDefault("redis", "true")
 	err := viper.ReadInConfig()
-	if err != nil {
-		panic(err)
-	}
 	useRedis := viper.GetBool("redis")
-	log.Println("Read config.yaml: redis = %s\n", useRedis)
+	log.Printf("Read config.yaml: redis = %t\n", useRedis)
 
 	log.Println("Canopy communication server started.")
 	flag.Parse()
