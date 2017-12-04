@@ -1,4 +1,4 @@
-// Package main runs the main server program.
+// Package main runs the main server comm program.
 package main
 
 import (
@@ -98,7 +98,7 @@ func (wsh wsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("Connected to: %s", (*r).RequestURI)
-	if db != None {
+	if db != none {
 		wsh.h.dbw.setAdd(true, "clients:list", (*r).RequestURI)
 	}
 	split := strings.Split((*r).RequestURI, "/")
@@ -118,7 +118,7 @@ func (wsh wsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}()
 		snd.writer()
 
-		if db != None {
+		if db != none {
 			log.Printf("Disconnected from: %s", (*r).RequestURI)
 			wsh.h.dbw.setRemove(true, "clients:list", (*r).RequestURI)
 			wsh.h.dbw.deleteKey(true, "clients:"+(*r).RequestURI+":name")
@@ -142,7 +142,7 @@ func (wsh wsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		rcv.reader()
 		log.Printf("Disconnected from: %s", (*r).RequestURI)
 
-		if db != None {
+		if db != none {
 			wsh.h.dbw.setRemove(true, "clients:list", (*r).RequestURI)
 			wsh.h.dbw.deleteKey(true, "clients:"+(*r).RequestURI+":to")
 			wsh.h.dbw.deleteKey(true, "clients:"+(*r).RequestURI+":from")
@@ -156,6 +156,7 @@ func (wsh wsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// defaultAssetPath creates a default path to assets
 func defaultAssetPath() string {
 	p, err := build.Default.Import("github.com/canopy-ros/canopy_server_comm", "",
 		build.FindOnly)
@@ -319,9 +320,10 @@ func (wsh graphHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
 	graphTempl.Execute(c, page)
 }
 
+// These are the options for the 'db' key in the config file
 const (
-	Redis string = "redis"
-	None  string = "none"
+	redis string = "redis"
+	none  string = "none"
 )
 
 var db string
@@ -335,7 +337,7 @@ func main() {
 	viper.AddConfigPath(".")
 	viper.AddConfigPath("/etc/canopy/")
 	viper.SetConfigName("config")
-	viper.SetDefault("db", None)
+	viper.SetDefault("db", none)
 	err := viper.ReadInConfig()
 	db := viper.GetString("db")
 
@@ -347,7 +349,7 @@ func main() {
 
 	// initialize database writer
 	switch db {
-	case Redis:
+	case redis:
 		log.Println("Initializing redis.")
 		c, err := redis.Dial("tcp", ":6379")
 		if err != nil {

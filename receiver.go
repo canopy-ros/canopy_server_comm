@@ -122,7 +122,7 @@ func (r *receiver) processor() {
 			}
 		}
 		r.to = list
-		if db != None {
+		if db != none {
 			r.h.dbw.addKey(false, "clients:"+r.name+":to", strings.Join(r.to, " "))
 			r.h.dbw.addKey(false, "clients:"+r.name+":from", m.From)
 			r.h.dbw.addKey(false, "clients:"+r.name+":topic", m.Topic)
@@ -162,7 +162,7 @@ func (r *receiver) reader() {
 			count = 0
 		}
 
-		if db != None {
+		if db != none {
 			r.h.dbw.addKey(false, "clients:"+r.name+":freq", r.rcvFreq)
 		}
 	}
