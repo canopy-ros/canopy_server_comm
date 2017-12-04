@@ -2,5 +2,8 @@ language: go
 dist: trusty
 go:
     - 1.9.2
+before_install:
+    - go get github.com/golang/lint/golint
 script:
+    - golint
     - go test -v
