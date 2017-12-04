@@ -16,11 +16,14 @@ import (
 	"text/template"
 )
 
+// Page is a graph of nodes and edges in the
+// graph visualization tool.
 type Page struct {
 	Nodes string
 	Edges string
 }
 
+// Node is a node in the graph visualization tool.
 type Node struct {
 	ID              string `json:"id"`
 	Label           string `json:"label"`
@@ -33,6 +36,7 @@ type Node struct {
 	Group string `json:"group,omitempty"`
 }
 
+// Edge is an edge in the graph visualization tool.
 type Edge struct {
 	ID     string `json:"id"`
 	From   string `json:"from,omitempty"`
@@ -53,6 +57,9 @@ type Edge struct {
 	} `json:"color,omitempty"`
 }
 
+// hub is a connection point between a network of senders and receivers.
+// Communication between senders and receivers is logged to a database
+// if a database writer is specified.
 type hub struct {
 	receivers map[*receiver]bool
 	senders   map[*sender]bool
@@ -71,6 +78,7 @@ func newHub() *hub {
 
 var upgrader = &websocket.Upgrader{ReadBufferSize: 1024, WriteBufferSize: 1024}
 
+// wsHandler handles HTTP server requests for client connections.
 type wsHandler struct {
 	h *hub
 }
@@ -166,6 +174,8 @@ func defaultAssetPath() string {
 	return p.Dir
 }
 
+// graphHandler handles HTTP server requests for the
+// graph visualization tool.
 type graphHandler struct {
 	h *hub
 }
@@ -320,7 +330,7 @@ func (wsh graphHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
 	graphTempl.Execute(c, page)
 }
 
-// These are the options for the 'db' key in the config file
+// Options for the 'db' key in the config file
 const (
 	redis string = "redis"
 	none  string = "none"
