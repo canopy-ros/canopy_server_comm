@@ -23,6 +23,7 @@ type Page struct {
 	Edges string
 }
 
+// Node is a node in the graph visualization tool.
 type Node struct {
 	ID              string `json:"id"`
 	Label           string `json:"label"`
