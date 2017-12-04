@@ -1,17 +1,18 @@
 package main
 
 import (
-	"net/http"
-	"time"
 	"log"
+	"net/http"
 	"testing"
+	"time"
 )
 
-// Test communication server
+// TestServerComm tests if communication server can
+// run without errors.
 func TestServerComm(t *testing.T) {
-        r := &wsHandler{}
-        srv := &http.Server {
-		Addr: ":8000",
+	r := &wsHandler{}
+	srv := &http.Server{
+		Addr:    ":8000",
 		Handler: r,
 	}
 
@@ -23,9 +24,9 @@ func TestServerComm(t *testing.T) {
 	}()
 
 	go srv.ListenAndServe()
-	log.Println("Server is running");
+	log.Println("Server is running")
 	time.Sleep(time.Second * 5)
 	ticker.Stop()
 	srv.Close()
-	log.Println("Server has been closed");
+	log.Println("Server has been closed")
 }
