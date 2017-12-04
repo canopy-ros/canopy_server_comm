@@ -56,7 +56,7 @@ func (s *sender) writer() {
 	go s.heartbeat(hbeat, stop)
 	count := make(map[*receiver]int32)
 	lastTime := make(map[*receiver]time.Time)
-	if db != none {
+	if db != dbNone {
 		s.h.dbw.addKey(false, "clients:"+s.name+":privateKey", s.privateKey)
 		s.h.dbw.addKey(false, "clients:"+s.name+":description", s.description)
 		s.h.dbw.addKey(false, "clients:"+s.name+":name", s.shortname)
@@ -85,7 +85,7 @@ func (s *sender) writer() {
 			count[message.r] = 0
 		}
 
-		if db != none {
+		if db != dbNone {
 			s.h.dbw.addKey(false, "clients:"+s.name+":privateKey", s.privateKey)
 			s.h.dbw.addKey(false, "clients:"+s.name+":description", s.description)
 			s.h.dbw.addKey(false, "clients:"+s.name+":name", s.shortname)

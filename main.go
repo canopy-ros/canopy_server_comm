@@ -106,7 +106,7 @@ func (wsh wsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("Connected to: %s", (*r).RequestURI)
-	if db != none {
+	if db != dbNone {
 		wsh.h.dbw.setAdd(true, "clients:list", (*r).RequestURI)
 	}
 	split := strings.Split((*r).RequestURI, "/")
@@ -126,7 +126,7 @@ func (wsh wsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}()
 		snd.writer()
 
-		if db != none {
+		if db != dbNone {
 			log.Printf("Disconnected from: %s", (*r).RequestURI)
 			wsh.h.dbw.setRemove(true, "clients:list", (*r).RequestURI)
 			wsh.h.dbw.deleteKey(true, "clients:"+(*r).RequestURI+":name")
@@ -150,7 +150,7 @@ func (wsh wsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		rcv.reader()
 		log.Printf("Disconnected from: %s", (*r).RequestURI)
 
-		if db != none {
+		if db != dbNone {
 			wsh.h.dbw.setRemove(true, "clients:list", (*r).RequestURI)
 			wsh.h.dbw.deleteKey(true, "clients:"+(*r).RequestURI+":to")
 			wsh.h.dbw.deleteKey(true, "clients:"+(*r).RequestURI+":from")
@@ -332,8 +332,8 @@ func (wsh graphHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
 
 // Options for the 'db' key in the config file
 const (
-	redis string = "redis"
-	none  string = "none"
+	dbRedis string = "redis"
+	dbNone  string = "none"
 )
 
 var db string
@@ -347,7 +347,7 @@ func main() {
 	viper.AddConfigPath(".")
 	viper.AddConfigPath("/etc/canopy/")
 	viper.SetConfigName("config")
-	viper.SetDefault("db", none)
+	viper.SetDefault("db", dbNone)
 	err := viper.ReadInConfig()
 	db := viper.GetString("db")
 
@@ -359,7 +359,7 @@ func main() {
 
 	// initialize database writer
 	switch db {
-	case redis:
+	case dbRedis:
 		log.Println("Initializing redis.")
 		c, err := redis.Dial("tcp", ":6379")
 		if err != nil {
