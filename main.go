@@ -116,9 +116,9 @@ func (wsh wsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			delete(wsh.h.senderMap[split[1]], split[2])
 			close(snd.send)
 		}()
+		snd.writer()
 
 		if db != None {
-			snd.writer()
 			log.Printf("Disconnected from: %s", (*r).RequestURI)
 			wsh.h.dbw.setRemove(true, "clients:list", (*r).RequestURI)
 			wsh.h.dbw.deleteKey(true, "clients:"+(*r).RequestURI+":name")
