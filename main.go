@@ -1,4 +1,4 @@
-// Package main runs the main server program.
+// Package main runs the main server comm program.
 package main
 
 import (
@@ -16,11 +16,14 @@ import (
 	"text/template"
 )
 
+// Page is a graph of nodes and edges in the
+// graph visualization tool.
 type Page struct {
 	Nodes string
 	Edges string
 }
 
+// Node is a node in the graph visualization tool.
 type Node struct {
 	ID              string `json:"id"`
 	Label           string `json:"label"`
@@ -33,6 +36,7 @@ type Node struct {
 	Group string `json:"group,omitempty"`
 }
 
+// Edge is an edge in the graph visualization tool.
 type Edge struct {
 	ID     string `json:"id"`
 	From   string `json:"from,omitempty"`
@@ -53,6 +57,9 @@ type Edge struct {
 	} `json:"color,omitempty"`
 }
 
+// hub is a connection point between a network of senders and receivers.
+// Communication between senders and receivers is logged to a database
+// if a database writer is specified.
 type hub struct {
 	receivers map[*receiver]bool
 	senders   map[*sender]bool
@@ -71,9 +78,9 @@ func newHub() *hub {
 
 var upgrader = &websocket.Upgrader{ReadBufferSize: 1024, WriteBufferSize: 1024}
 
+// wsHandler handles HTTP server requests for client connections.
 type wsHandler struct {
 	h *hub
-	c *redis.Conn
 }
 
 // ServeHTTP from wsHandler responds to connections from clients.
@@ -99,14 +106,16 @@ func (wsh wsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("Connected to: %s", (*r).RequestURI)
-	wsh.h.dbw.write(true, "SADD", "clients:list", (*r).RequestURI)
+	if db != dbNone {
+		wsh.h.dbw.setAdd(true, "clients:list", (*r).RequestURI)
+	}
 	split := strings.Split((*r).RequestURI, "/")
 	if _, ok := wsh.h.senderMap[split[1]]; !ok {
 		wsh.h.senderMap[split[1]] = make(map[string]*sender)
 	}
 	if strings.HasSuffix((*r).RequestURI, "receiving") {
 		snd := &sender{send: make(chan sendChannel, 2), ws: ws, h: wsh.h,
-			redisconn: wsh.c, name: (*r).RequestURI, private_key: split[1],
+			name: (*r).RequestURI, privateKey: split[1],
 			shortname: split[2], freqs: make(map[*receiver]float32)}
 		wsh.h.senders[snd] = true
 		wsh.h.senderMap[split[1]][split[2]] = snd
@@ -116,18 +125,21 @@ func (wsh wsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			close(snd.send)
 		}()
 		snd.writer()
-		log.Printf("Disconnected from: %s", (*r).RequestURI)
-		wsh.h.dbw.write(true, "SREM", "clients:list", (*r).RequestURI)
-		wsh.h.dbw.write(true, "DEL", "clients:"+(*r).RequestURI+
-			":name", "clients:"+(*r).RequestURI+":private_key",
-			"clients:"+(*r).RequestURI+":description")
-		for key := range snd.freqs {
-			wsh.h.dbw.write(true, "DEL", "clients:"+(*r).RequestURI+
-				":freq:"+key.name[len("/"+key.private_key):])
+
+		if db != dbNone {
+			log.Printf("Disconnected from: %s", (*r).RequestURI)
+			wsh.h.dbw.setRemove(true, "clients:list", (*r).RequestURI)
+			wsh.h.dbw.deleteKey(true, "clients:"+(*r).RequestURI+":name")
+			wsh.h.dbw.deleteKey(true, "clients:"+(*r).RequestURI+":privateKey")
+			wsh.h.dbw.deleteKey(true, "clients:"+(*r).RequestURI+":description")
+			for key := range snd.freqs {
+				wsh.h.dbw.deleteKey(true, "clients:"+(*r).RequestURI+
+					":freq:"+key.name[len("/"+key.privateKey):])
+			}
 		}
 	} else {
 		rcv := &receiver{process: make(chan []byte, 2), ws: ws, h: wsh.h,
-			redisconn: wsh.c, name: (*r).RequestURI, private_key: split[1],
+			name: (*r).RequestURI, privateKey: split[1],
 			shortname: split[2]}
 		rcv.h.receivers[rcv] = true
 		defer func() {
@@ -137,17 +149,22 @@ func (wsh wsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		go rcv.processor()
 		rcv.reader()
 		log.Printf("Disconnected from: %s", (*r).RequestURI)
-		wsh.h.dbw.write(true, "SREM", "clients:list", (*r).RequestURI)
-		wsh.h.dbw.write(true, "DEL", "clients:"+(*r).RequestURI+
-			":to", "clients:"+(*r).RequestURI+":from",
-			"clients:"+(*r).RequestURI+":topic", "clients:"+
-				(*r).RequestURI+":type", "clients:"+(*r).RequestURI+
-				":stamp", "clients:"+(*r).RequestURI+":msg",
-			"clients:"+(*r).RequestURI+":private_key", "clients:"+
-				(*r).RequestURI+":freq")
+
+		if db != dbNone {
+			wsh.h.dbw.setRemove(true, "clients:list", (*r).RequestURI)
+			wsh.h.dbw.deleteKey(true, "clients:"+(*r).RequestURI+":to")
+			wsh.h.dbw.deleteKey(true, "clients:"+(*r).RequestURI+":from")
+			wsh.h.dbw.deleteKey(true, "clients:"+(*r).RequestURI+":topic")
+			wsh.h.dbw.deleteKey(true, "clients:"+(*r).RequestURI+":type")
+			wsh.h.dbw.deleteKey(true, "clients:"+(*r).RequestURI+":stamp")
+			wsh.h.dbw.deleteKey(true, "clients:"+(*r).RequestURI+":msg")
+			wsh.h.dbw.deleteKey(true, "clients:"+(*r).RequestURI+":privateKey")
+			wsh.h.dbw.deleteKey(true, "clients:"+(*r).RequestURI+":freq")
+		}
 	}
 }
 
+// defaultAssetPath creates a default path to assets
 func defaultAssetPath() string {
 	p, err := build.Default.Import("github.com/canopy-ros/canopy_server_comm", "",
 		build.FindOnly)
@@ -157,6 +174,8 @@ func defaultAssetPath() string {
 	return p.Dir
 }
 
+// graphHandler handles HTTP server requests for the
+// graph visualization tool.
 type graphHandler struct {
 	h *hub
 }
@@ -228,7 +247,7 @@ func (wsh graphHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
 				}{
 					BorderRadius: 3,
 				},
-				Title: rcv.msg_type,
+				Title: rcv.msgType,
 				Group: split[2],
 			}
 			nodes = append(nodes, node)
@@ -311,37 +330,54 @@ func (wsh graphHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
 	graphTempl.Execute(c, page)
 }
 
+// Options for the 'db' key in the config file
+const (
+	dbRedis string = "redis"
+	dbNone  string = "none"
+)
+
+var db string
 var addr = flag.String("addr", ":50000", "http service address")
 var assets = flag.String("assets", defaultAssetPath(), "path to assets")
 
 func main() {
+	log.Println("Canopy communication server started.")
+
+	// get config
 	viper.AddConfigPath(".")
 	viper.AddConfigPath("/etc/canopy/")
 	viper.SetConfigName("config")
-	viper.SetDefault("redis", "true")
+	viper.SetDefault("db", dbNone)
 	err := viper.ReadInConfig()
-	useRedis := viper.GetBool("redis")
-	log.Printf("Read config.yaml: redis = %t\n", useRedis)
+	db := viper.GetString("db")
 
-	log.Println("Canopy communication server started.")
 	flag.Parse()
 	fs := http.FileServer(http.Dir("graph/js"))
 	http.Handle("/graph/js/", http.StripPrefix("/graph/js/", fs))
 	h := newHub()
 	http.Handle("/graph/", graphHandler{h: h})
-	c, err := redis.Dial("tcp", ":6379")
-	if err != nil {
-		panic(err)
-	}
-	c.Do("DEL", "clients:list")
-	defer func() {
+
+	// initialize database writer
+	switch db {
+	case dbRedis:
+		log.Println("Initializing redis.")
+		c, err := redis.Dial("tcp", ":6379")
+		if err != nil {
+			panic(err)
+		}
+		dbw := &redisWriter{conn: &c, commChannel: make(chan command, 2)}
+		h.dbw = dbw
 		c.Do("DEL", "clients:list")
-		c.Close()
-	}()
-	dbw := dbwriter{redisconn: &c, commChannel: make(chan command, 2)}
-	h.dbw = dbw
-	go dbw.writer()
-	http.Handle("/", wsHandler{h: h, c: &c})
+		defer func() {
+			c.Do("DEL", "clients:list")
+			c.Close()
+		}()
+		go dbw.writer()
+	default:
+		log.Println("No database specified.")
+	}
+	http.Handle("/", wsHandler{h: h})
+
 	if err = http.ListenAndServe(*addr, nil); err != nil {
 		log.Fatal("ListenAndServe:", err)
 	}
