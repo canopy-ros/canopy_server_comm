@@ -8,7 +8,7 @@ import (
 type dbwriter interface {
 	writer()
 	addKey(blocking bool, key string, value interface{})
-	deleteKey(blocking bool, key string)
+	deleteKey(blocking bool, key ...string)
 	setAdd(blocking bool, key string, members ...interface{})
 	setRemove(blocking bool, key string, members ...interface{})
 	closeConn()
@@ -54,7 +54,7 @@ func (rw *redisWriter) addKey(blocking bool, key string, value interface{}) {
 }
 
 // deleteKey from redisWriter deletes a specified key from redis.
-func (rw *redisWriter) deleteKey(blocking bool, key string) {
+func (rw *redisWriter) deleteKey(blocking bool, key ...string) {
 	rw.write(blocking, "DEL", key)
 }
 

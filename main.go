@@ -129,9 +129,9 @@ func (wsh wsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if db != dbNone {
 			log.Printf("Disconnected from: %s", (*r).RequestURI)
 			wsh.h.dbw.setRemove(true, "clients:list", (*r).RequestURI)
-			wsh.h.dbw.deleteKey(true, "clients:"+(*r).RequestURI+":name")
-			wsh.h.dbw.deleteKey(true, "clients:"+(*r).RequestURI+":privateKey")
-			wsh.h.dbw.deleteKey(true, "clients:"+(*r).RequestURI+":description")
+			wsh.h.dbw.deleteKey(true, "clients:"+(*r).RequestURI+":name",
+				"clients:"+(*r).RequestURI+":privateKey",
+				"clients:"+(*r).RequestURI+":description")
 			for key := range snd.freqs {
 				wsh.h.dbw.deleteKey(true, "clients:"+(*r).RequestURI+
 					":freq:"+key.name[len("/"+key.privateKey):])
@@ -152,14 +152,14 @@ func (wsh wsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		if db != dbNone {
 			wsh.h.dbw.setRemove(true, "clients:list", (*r).RequestURI)
-			wsh.h.dbw.deleteKey(true, "clients:"+(*r).RequestURI+":to")
-			wsh.h.dbw.deleteKey(true, "clients:"+(*r).RequestURI+":from")
-			wsh.h.dbw.deleteKey(true, "clients:"+(*r).RequestURI+":topic")
-			wsh.h.dbw.deleteKey(true, "clients:"+(*r).RequestURI+":type")
-			wsh.h.dbw.deleteKey(true, "clients:"+(*r).RequestURI+":stamp")
-			wsh.h.dbw.deleteKey(true, "clients:"+(*r).RequestURI+":msg")
-			wsh.h.dbw.deleteKey(true, "clients:"+(*r).RequestURI+":privateKey")
-			wsh.h.dbw.deleteKey(true, "clients:"+(*r).RequestURI+":freq")
+			wsh.h.dbw.deleteKey(true, "clients:"+(*r).RequestURI+":to",
+				"clients:"+(*r).RequestURI+":from",
+				"clients:"+(*r).RequestURI+":topic",
+				"clients:"+(*r).RequestURI+":type",
+				"clients:"+(*r).RequestURI+":stamp",
+				"clients:"+(*r).RequestURI+":msg",
+				"clients:"+(*r).RequestURI+":privateKey",
+				"clients:"+(*r).RequestURI+":freq")
 		}
 	}
 }
