@@ -4,7 +4,7 @@ import (
 	"github.com/garyburd/redigo/redis"
 )
 
-// dbwriter is an interface for database writers.
+// DBWriter is an interface for database writers.
 type DBWriter interface {
 	Writer()
 	AddKey(blocking bool, key string, value interface{})
@@ -15,13 +15,13 @@ type DBWriter interface {
 }
 
 // command consists of a command and arguments to be sent to
-// a database with a dbwriter.
+// a database with a DBWriter.
 type command struct {
 	comm string
 	args []interface{}
 }
 
-// redisWriter is a dbwriter for redis.
+// redisWriter is a DBWriter for redis.
 type redisWriter struct {
 	conn        *redis.Conn
 	commChannel chan command
