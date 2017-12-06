@@ -5,13 +5,13 @@ import (
 )
 
 // dbwriter is an interface for database writers.
-type dbwriter interface {
-	writer()
-	addKey(blocking bool, key string, value interface{})
-	deleteKey(blocking bool, key ...string)
-	setAdd(blocking bool, key string, members ...interface{})
-	setRemove(blocking bool, key string, members ...interface{})
-	closeConn()
+type DBWriter interface {
+	Writer()
+	AddKey(blocking bool, key string, value interface{})
+	DeleteKey(blocking bool, key ...string)
+	SetAdd(blocking bool, key string, members ...interface{})
+	SetRemove(blocking bool, key string, members ...interface{})
+	CloseConn()
 }
 
 // command consists of a command and arguments to be sent to
@@ -42,33 +42,33 @@ func (rw *redisWriter) write(blocking bool, comm string, args ...interface{}) {
 
 // writer from redisWriter sends commands and arguments from the
 // object's communication channel to the redis database.
-func (rw *redisWriter) writer() {
+func (rw *redisWriter) Writer() {
 	for c := range rw.commChannel {
 		(*rw.conn).Do(c.comm, c.args...)
 	}
 }
 
-// addKey from redisWriter adds a specified key and value to redis.
-func (rw *redisWriter) addKey(blocking bool, key string, value interface{}) {
+// AddKey from redisWriter adds a specified key and value to redis.
+func (rw *redisWriter) AddKey(blocking bool, key string, value interface{}) {
 	rw.write(blocking, "SET", key, value)
 }
 
-// deleteKey from redisWriter deletes a specified key from redis.
-func (rw *redisWriter) deleteKey(blocking bool, key ...string) {
+// DeleteKey from redisWriter deletes a specified key from redis.
+func (rw *redisWriter) DeleteKey(blocking bool, key ...string) {
 	rw.write(blocking, "DEL", key)
 }
 
-// setAdd from redisWriter adds members to a set in redis.
-func (rw *redisWriter) setAdd(blocking bool, key string, members ...interface{}) {
+// SetAdd from redisWriter adds members to a set in redis.
+func (rw *redisWriter) SetAdd(blocking bool, key string, members ...interface{}) {
 	rw.write(blocking, "SADD", key, members)
 }
 
-// setRemove from redisWriter removes members from a set in redis.
-func (rw *redisWriter) setRemove(blocking bool, key string, members ...interface{}) {
+// SetRemove from redisWriter removes members from a set in redis.
+func (rw *redisWriter) SetRemove(blocking bool, key string, members ...interface{}) {
 	rw.write(blocking, "SREM", members)
 }
 
-// closeConn from redisWriter closes the connection to redis.
-func (rw *redisWriter) closeConn() {
+// CloseConn from redisWriter closes the connection to redis.
+func (rw *redisWriter) CloseConn() {
 	(*rw.conn).Close()
 }

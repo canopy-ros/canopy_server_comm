@@ -57,9 +57,9 @@ func (s *sender) writer() {
 	count := make(map[*receiver]int32)
 	lastTime := make(map[*receiver]time.Time)
 	if db != dbNone {
-		s.h.dbw.addKey(false, "clients:"+s.name+":privateKey", s.privateKey)
-		s.h.dbw.addKey(false, "clients:"+s.name+":description", s.description)
-		s.h.dbw.addKey(false, "clients:"+s.name+":name", s.shortname)
+		s.h.dbw.AddKey(false, "clients:"+s.name+":privateKey", s.privateKey)
+		s.h.dbw.AddKey(false, "clients:"+s.name+":description", s.description)
+		s.h.dbw.AddKey(false, "clients:"+s.name+":name", s.shortname)
 	}
 
 	for message := range s.send {
@@ -86,11 +86,11 @@ func (s *sender) writer() {
 		}
 
 		if db != dbNone {
-			s.h.dbw.addKey(false, "clients:"+s.name+":privateKey", s.privateKey)
-			s.h.dbw.addKey(false, "clients:"+s.name+":description", s.description)
-			s.h.dbw.addKey(false, "clients:"+s.name+":name", s.shortname)
+			s.h.dbw.AddKey(false, "clients:"+s.name+":privateKey", s.privateKey)
+			s.h.dbw.AddKey(false, "clients:"+s.name+":description", s.description)
+			s.h.dbw.AddKey(false, "clients:"+s.name+":name", s.shortname)
 			for key, value := range s.freqs {
-				s.h.dbw.addKey(false, "clients:"+s.name+":freq:"+
+				s.h.dbw.AddKey(false, "clients:"+s.name+":freq:"+
 					key.name[len("/"+key.privateKey):], value)
 			}
 		}

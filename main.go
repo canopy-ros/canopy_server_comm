@@ -64,7 +64,7 @@ type hub struct {
 	receivers map[*receiver]bool
 	senders   map[*sender]bool
 	senderMap map[string]map[string]*sender
-	dbw       dbwriter
+	dbw       DBWriter
 }
 
 // newHub creates a new hub object.
@@ -107,7 +107,7 @@ func (wsh wsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("Connected to: %s", (*r).RequestURI)
 	if db != dbNone {
-		wsh.h.dbw.setAdd(true, "clients:list", (*r).RequestURI)
+		wsh.h.dbw.SetAdd(true, "clients:list", (*r).RequestURI)
 	}
 	split := strings.Split((*r).RequestURI, "/")
 	if _, ok := wsh.h.senderMap[split[1]]; !ok {
@@ -128,12 +128,12 @@ func (wsh wsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		if db != dbNone {
 			log.Printf("Disconnected from: %s", (*r).RequestURI)
-			wsh.h.dbw.setRemove(true, "clients:list", (*r).RequestURI)
-			wsh.h.dbw.deleteKey(true, "clients:"+(*r).RequestURI+":name",
+			wsh.h.dbw.SetRemove(true, "clients:list", (*r).RequestURI)
+			wsh.h.dbw.DeleteKey(true, "clients:"+(*r).RequestURI+":name",
 				"clients:"+(*r).RequestURI+":privateKey",
 				"clients:"+(*r).RequestURI+":description")
 			for key := range snd.freqs {
-				wsh.h.dbw.deleteKey(true, "clients:"+(*r).RequestURI+
+				wsh.h.dbw.DeleteKey(true, "clients:"+(*r).RequestURI+
 					":freq:"+key.name[len("/"+key.privateKey):])
 			}
 		}
@@ -151,8 +151,8 @@ func (wsh wsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Disconnected from: %s", (*r).RequestURI)
 
 		if db != dbNone {
-			wsh.h.dbw.setRemove(true, "clients:list", (*r).RequestURI)
-			wsh.h.dbw.deleteKey(true, "clients:"+(*r).RequestURI+":to",
+			wsh.h.dbw.SetRemove(true, "clients:list", (*r).RequestURI)
+			wsh.h.dbw.DeleteKey(true, "clients:"+(*r).RequestURI+":to",
 				"clients:"+(*r).RequestURI+":from",
 				"clients:"+(*r).RequestURI+":topic",
 				"clients:"+(*r).RequestURI+":type",
@@ -372,7 +372,7 @@ func main() {
 			c.Do("DEL", "clients:list")
 			c.Close()
 		}()
-		go dbw.writer()
+		go dbw.Writer()
 	default:
 		log.Println("No database specified.")
 	}

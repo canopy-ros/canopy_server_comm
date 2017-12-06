@@ -123,13 +123,13 @@ func (r *receiver) processor() {
 		}
 		r.to = list
 		if db != dbNone {
-			r.h.dbw.addKey(false, "clients:"+r.name+":to", strings.Join(r.to, " "))
-			r.h.dbw.addKey(false, "clients:"+r.name+":from", m.From)
-			r.h.dbw.addKey(false, "clients:"+r.name+":topic", m.Topic)
-			r.h.dbw.addKey(false, "clients:"+r.name+":type", m.Type)
-			r.h.dbw.addKey(false, "clients:"+r.name+":stamp", m.Stamp)
-			r.h.dbw.addKey(false, "clients:"+r.name+":msg", m.Msg)
-			r.h.dbw.addKey(false, "clients:"+r.name+":privateKey", m.PrivateKey)
+			r.h.dbw.AddKey(false, "clients:"+r.name+":to", strings.Join(r.to, " "))
+			r.h.dbw.AddKey(false, "clients:"+r.name+":from", m.From)
+			r.h.dbw.AddKey(false, "clients:"+r.name+":topic", m.Topic)
+			r.h.dbw.AddKey(false, "clients:"+r.name+":type", m.Type)
+			r.h.dbw.AddKey(false, "clients:"+r.name+":stamp", m.Stamp)
+			r.h.dbw.AddKey(false, "clients:"+r.name+":msg", m.Msg)
+			r.h.dbw.AddKey(false, "clients:"+r.name+":privateKey", m.PrivateKey)
 		}
 	}
 }
@@ -163,7 +163,7 @@ func (r *receiver) reader() {
 		}
 
 		if db != dbNone {
-			r.h.dbw.addKey(false, "clients:"+r.name+":freq", r.rcvFreq)
+			r.h.dbw.AddKey(false, "clients:"+r.name+":freq", r.rcvFreq)
 		}
 	}
 	r.ws.Close()
