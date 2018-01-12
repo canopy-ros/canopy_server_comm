@@ -349,7 +349,7 @@ func main() {
 	viper.SetConfigName("config")
 	viper.SetDefault("db", dbNone)
 	err := viper.ReadInConfig()
-	db := viper.GetString("db")
+	db = viper.GetString("db")
 
 	flag.Parse()
 	fs := http.FileServer(http.Dir("graph/js"))
