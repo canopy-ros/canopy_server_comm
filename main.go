@@ -85,7 +85,7 @@ type wsHandler struct {
 
 // ServeHTTP from wsHandler responds to connections from clients.
 func (wsh wsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if (*r).RequestURI[:len("/graph")] == "/graph" || (*r).RequestURI[:len("/favicon")] == "/favicon" {
+	if len((*r).RequestURI) >= len("/favicon") && (*r).RequestURI[:len("/favicon")] == "/favicon" {
 		return
 	}
 	// for rcv, _ := range wsh.h.receivers {
