@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
+	"github.com/gorilla/websocket"
 	"log"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 )
@@ -33,47 +35,35 @@ func TestServerComm(t *testing.T) {
 	log.Println("Server has been closed")
 }
 
-// TestServerCommHandler tests the communication
-// server handler's response to a valid request.
-func TestServerCommHandler(t *testing.T) {
+// TestWsHandler tests that the communication server's
+// websocket handler can receive messages successfully.
+func TestWsHandler(t *testing.T) {
 
 	// initialize server
 	db = "none"
-	log.Println(db)
 	r := &wsHandler{h: newHub()}
 	srv := httptest.NewServer(r)
-	defer srv.Close()
-	/*
-			srv := &http.Server{
-				Addr:    ":8000",
-				Handler: r,
-			}
-		    resp, err := http.Get(srv.URL)
-	*/
 
-	// create mock request
-	url := fmt.Sprintf("%s/PsFXjmWpszr6acSKL/test_robot/state", srv.URL)
-	req, err := http.NewRequest("GET", url, nil)
-	req.Header.Set("Connection", "Upgrade")
-	req.Header.Set("Upgrade", "websocket")
-	req.Header.Set("Sec-Websocket-Version", "13")
-	req.Header.Set("Sec-Websocket-Key", "7sCORs4/dvKiJRJb+vcZCA==")
-	req.Header.Set("Accept-Encoding", "gzip")
-
-	// send request and inspect response
-	/*
-		resp := httptest.NewRecorder()
-		h.ServeHTTP(resp, req)
-		if err != nil {
-			t.Fatal(err)
-		}
-		log.Println("Status code:", resp.Code)
-		log.Println("Response:", resp)
-	*/
-	resp, err := http.DefaultClient.Do(req)
+	// create websocket connection to server
+	u, _ := url.Parse(fmt.Sprintf("%s/PsFXjmWpszr6acSKL/test_robot/description", srv.URL))
+	u.Scheme = "ws"
+	ws, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	log.Println("Status code:", resp.StatusCode)
-	log.Println("Response:", resp)
+	defer ws.Close()
+
+	// send test messages
+	for i := 0; i < 5; i++ {
+		log.Printf("Sending message %d", i)
+		err = ws.WriteMessage(websocket.BinaryMessage, []byte("test"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _, err := ws.ReadMessage()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	srv.Close()
 }
