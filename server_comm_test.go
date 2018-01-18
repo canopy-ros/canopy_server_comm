@@ -11,8 +11,8 @@ import (
 	"time"
 )
 
-// TestServerComm tests if communication server can
-// run without errors.
+// TestServerComm tests if communication server's
+// web socket handler can run without errors.
 func TestServerComm(t *testing.T) {
 	r := &wsHandler{}
 	srv := &http.Server{
