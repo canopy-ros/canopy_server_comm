@@ -169,6 +169,7 @@ func defaultAssetPath() string {
 	p, err := build.Default.Import("github.com/canopy-ros/canopy_server_comm", "",
 		build.FindOnly)
 	if err != nil {
+		log.Println("AssetPath Error:", err)
 		return "."
 	}
 	return p.Dir
