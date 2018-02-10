@@ -37,7 +37,7 @@ func (s *sender) heartbeat(beat chan bool, stop chan bool) {
 		select {
 		case <-beat:
 		case <-time.After(500 * time.Millisecond):
-			message := make([]byte, 1)
+            message := make([]byte, 2)
 			s.send <- sendChannel{r: &receiver{}, data: message}
 		case <-stop:
 			exit = true
@@ -84,6 +84,12 @@ func (s *sender) writer() {
 			lastTime[message.r] = time.Now()
 			count[message.r] = 0
 		}
+        // s.ws.SetReadDeadline(time.Now().Add(2000 * time.Millisecond))
+        _, _, err = s.ws.ReadMessage()
+        if err != nil {
+            log.Printf("[%s] AcknowledgeTimeout: %s", s.name, err)
+			break
+        }
 
 		if db != dbNone {
 			s.h.dbw.AddKey(false, "clients:"+s.name+":privateKey", s.privateKey)

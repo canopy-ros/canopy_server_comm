@@ -114,7 +114,7 @@ func (wsh wsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		wsh.h.senderMap[split[1]] = make(map[string]*sender)
 	}
 	if strings.HasSuffix((*r).RequestURI, "receiving") {
-		snd := &sender{send: make(chan sendChannel, 2), ws: ws, h: wsh.h,
+		snd := &sender{send: make(chan sendChannel, 1), ws: ws, h: wsh.h,
 			name: (*r).RequestURI, privateKey: split[1],
 			shortname: split[2], freqs: make(map[*receiver]float32)}
 		wsh.h.senders[snd] = true
@@ -138,7 +138,7 @@ func (wsh wsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	} else {
-		rcv := &receiver{process: make(chan []byte, 2), ws: ws, h: wsh.h,
+		rcv := &receiver{process: make(chan []byte, 1), ws: ws, h: wsh.h,
 			name: (*r).RequestURI, privateKey: split[1],
 			shortname: split[2]}
 		rcv.h.receivers[rcv] = true
