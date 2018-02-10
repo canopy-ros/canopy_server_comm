@@ -10,14 +10,14 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"net"
 )
 
-type receiver struct {
-	ws         *websocket.Conn
+type client struct {
 	process    chan []byte
 	h          *hub
+	addr       *net.UDPAddr
 	name       string
-	shortname  string
 	privateKey string
 	to         []string
 	msgType    string
@@ -38,14 +38,22 @@ type description struct {
 	Data string
 }
 
-// processor from receiver decompresses the packet and unmarshals the JSON
+// processor from client decompresses the packet and unmarshals the JSON
 // to retrieve destination information. It then forwards the original packet
 // to the desired client senders.
-func (r *receiver) processor() {
+func (r *client) processor() {
 	lastTime := 0.0
 	for {
-		msg := <-r.process
-		snd := sendChannel{r: r, data: msg}
+        select {
+        case msg := <-r.process:
+            break
+        default:
+            r.h.sendChannel <- sendPacket{addr: r.addr, []byte("HANDSHAKE")}
+            time.Sleep(500 * time.Millisecond)
+        }
+    }
+	for {
+        msg := <- r.process
 		rdr, err := zlib.NewReader(bytes.NewBuffer(msg))
 		if err != nil {
 			break
@@ -58,7 +66,7 @@ func (r *receiver) processor() {
 		json.Unmarshal(decompressed[4:], &m)
 		//log.Println("To:", m.To)
 		// Ensure message is coming from correct client.
-		if m.From != r.shortname || m.PrivateKey != r.privateKey {
+		if m.From != r.name || m.PrivateKey != r.privateKey {
 			return
 		}
 		// Ensure messages are sent in order.
@@ -71,18 +79,18 @@ func (r *receiver) processor() {
 		if split[len(split)-1] == "description" {
 			var d description
 			json.Unmarshal(m.Msg, &d)
-			if sender, ok := r.h.senderMap[r.privateKey][split[1]]; ok {
+			if sender, ok := r.h.clientMap[r.privateKey][split[1]]; ok {
 				sender.description = d.Data
 			}
 		}
-		for name := range r.h.senderMap[r.privateKey] {
+		for name := range r.h.clientMap[r.privateKey] {
 			if strings.HasPrefix(name, "canopy_leaflet_") {
 				m.To = append(m.To, name)
 			}
 		}
 		list := make([]string, 0)
 		for _, to := range m.To {
-			if sender, ok := r.h.senderMap[r.privateKey][to]; ok {
+			if sender, ok := r.h.clientMap[r.privateKey][to]; ok {
 				exists := false
 				for _, check := range list {
 					if check == to {
@@ -92,13 +100,14 @@ func (r *receiver) processor() {
 				}
 				if !exists {
 					list = append(list, to)
+                    snd := sendPacket{addr: sender.addr, data: msg}
 					select {
-					case sender.send <- snd:
+					case r.h.sendChannel <- snd:
 					default:
 					}
 				}
 			} else { // Regex
-				for name, sender := range r.h.senderMap[r.privateKey] {
+				for name, sender := range r.h.clientMap[r.privateKey] {
 					if name != m.From {
 						match, _ := regexp.MatchString(to, name)
 						if match {
@@ -111,8 +120,9 @@ func (r *receiver) processor() {
 							}
 							if !exists {
 								list = append(list, name)
+                                snd := sendPacket{addr: sender.addr, data: msg}
 								select {
-								case sender.send <- snd:
+								case r.h.sendChannel <- snd:
 								default:
 								}
 							}
@@ -134,9 +144,9 @@ func (r *receiver) processor() {
 	}
 }
 
-// reader from receiver continually polls the socket for new packets,
+// reader from client continually polls the socket for new packets,
 // and then sends them to be processed. It also calculates read frequencies.
-func (r *receiver) reader() {
+func (r *client) reader() {
 	count := 0
 	lastTime := time.Now()
 	for {
