@@ -4,9 +4,7 @@ import (
 	"bytes"
 	"compress/zlib"
 	"encoding/json"
-	"github.com/gorilla/websocket"
 	"io"
-	"log"
 	"regexp"
 	"strings"
 	"time"
@@ -19,9 +17,9 @@ type client struct {
 	addr       *net.UDPAddr
 	name       string
 	privateKey string
-	to         []string
 	msgType    string
 	rcvFreq    float32
+	description string
 }
 
 type message struct {
@@ -43,12 +41,14 @@ type description struct {
 // to the desired client senders.
 func (r *client) processor() {
 	lastTime := 0.0
-	for {
+    for stay, timeout := true, time.After(10 * time.Second); stay; {
         select {
-        case msg := <-r.process:
-            break
+        case <-r.process:
+            stay = false
+        case <-timeout:
+            stay = false
         default:
-            r.h.sendChannel <- sendPacket{addr: r.addr, []byte("HANDSHAKE")}
+            r.h.sendChannel <- sendPacket{addr: r.addr, data: []byte("HANDSHAKE")}
             time.Sleep(500 * time.Millisecond)
         }
     }
@@ -67,11 +67,11 @@ func (r *client) processor() {
 		//log.Println("To:", m.To)
 		// Ensure message is coming from correct client.
 		if m.From != r.name || m.PrivateKey != r.privateKey {
-			return
+		    continue
 		}
 		// Ensure messages are sent in order.
 		if m.Stamp < lastTime {
-			return
+		    continue
 		}
 		lastTime = m.Stamp
 		r.msgType = m.Type
@@ -100,7 +100,7 @@ func (r *client) processor() {
 				}
 				if !exists {
 					list = append(list, to)
-                    snd := sendPacket{addr: sender.addr, data: msg}
+                    snd := sendPacket{addr: sender.addr, data: append([]byte{}, msg...)}
 					select {
 					case r.h.sendChannel <- snd:
 					default:
@@ -120,7 +120,7 @@ func (r *client) processor() {
 							}
 							if !exists {
 								list = append(list, name)
-                                snd := sendPacket{addr: sender.addr, data: msg}
+                                snd := sendPacket{addr: sender.addr, data: append([]byte{}, msg...)}
 								select {
 								case r.h.sendChannel <- snd:
 								default:
@@ -131,9 +131,7 @@ func (r *client) processor() {
 				}
 			}
 		}
-		r.to = list
 		if db != dbNone {
-			r.h.dbw.AddKey(false, "clients:"+r.name+":to", strings.Join(r.to, " "))
 			r.h.dbw.AddKey(false, "clients:"+r.name+":from", m.From)
 			r.h.dbw.AddKey(false, "clients:"+r.name+":topic", m.Topic)
 			r.h.dbw.AddKey(false, "clients:"+r.name+":type", m.Type)
@@ -142,39 +140,4 @@ func (r *client) processor() {
 			r.h.dbw.AddKey(false, "clients:"+r.name+":privateKey", m.PrivateKey)
 		}
 	}
-}
-
-// reader from client continually polls the socket for new packets,
-// and then sends them to be processed. It also calculates read frequencies.
-func (r *client) reader() {
-	count := 0
-	lastTime := time.Now()
-	for {
-		_, message, err := r.ws.ReadMessage()
-		if err != nil {
-			log.Printf("[%s] ReadError: %s", r.name, err)
-			break
-		}
-		select {
-		case r.process <- message:
-		default:
-		}
-		//log.Printf("%s: %d", r.name, unsafe.Sizeof(message))
-		msg := make([]byte, 1)
-		err = r.ws.WriteMessage(websocket.BinaryMessage, msg)
-		if err != nil {
-			break
-		}
-		count++
-		if count == 20 {
-			r.rcvFreq = 20.0 * 1e9 / float32((time.Now().Sub(lastTime)))
-			lastTime = time.Now()
-			count = 0
-		}
-
-		if db != dbNone {
-			r.h.dbw.AddKey(false, "clients:"+r.name+":freq", r.rcvFreq)
-		}
-	}
-	r.ws.Close()
 }

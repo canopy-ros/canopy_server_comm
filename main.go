@@ -8,6 +8,7 @@ import (
     "log"
     "net"
     "strings"
+    "fmt"
 )
 
 type sendPacket struct {
@@ -31,90 +32,8 @@ func newHub() *hub {
     }
 }
 
-// ServeHTTP from wsHandler responds to connections from clients.
-func (wsh wsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-    if len((*r).RequestURI) >= len("/favicon") && (*r).RequestURI[:len("/favicon")] == "/favicon" {
-        return
-    }
-    // for rcv, _ := range wsh.h.receivers {
-    //     if rcv.name == (*r).RequestURI {
-    //         log.Printf("Already connected to: %s", (*r).RequestURI)
-    //         return
-    //     }
-    // }
-    // for snd, _ := range wsh.h.senders {
-    //     if snd.name == (*r).RequestURI {
-    //         log.Printf("Already connected to: %s", (*r).RequestURI)
-    //         return
-    //     }
-    // }
-    ws, err := upgrader.Upgrade(w, r, nil)
-    if err != nil {
-        log.Println("ConnectionError:", err)
-        return
-    }
-    log.Printf("Connected to: %s", (*r).RequestURI)
-    if db != dbNone {
-        wsh.h.dbw.SetAdd(true, "clients:list", (*r).RequestURI)
-    }
-    split := strings.Split((*r).RequestURI, "/")
-    if _, ok := wsh.h.senderMap[split[1]]; !ok {
-        wsh.h.senderMap[split[1]] = make(map[string]*sender)
-    }
-    if strings.HasSuffix((*r).RequestURI, "receiving") {
-        snd := &sender{send: make(chan sendChannel, 1), ws: ws, h: wsh.h,
-            name: (*r).RequestURI, privateKey: split[1],
-            shortname: split[2], freqs: make(map[*receiver]float32)}
-        wsh.h.senders[snd] = true
-        wsh.h.senderMap[split[1]][split[2]] = snd
-        defer func() {
-            delete(wsh.h.senders, snd)
-            delete(wsh.h.senderMap[split[1]], split[2])
-            close(snd.send)
-        }()
-        snd.writer()
-
-        if db != dbNone {
-            log.Printf("Disconnected from: %s", (*r).RequestURI)
-            wsh.h.dbw.SetRemove(true, "clients:list", (*r).RequestURI)
-            wsh.h.dbw.DeleteKey(true, "clients:"+(*r).RequestURI+":name",
-                "clients:"+(*r).RequestURI+":privateKey",
-                "clients:"+(*r).RequestURI+":description")
-            for key := range snd.freqs {
-                wsh.h.dbw.DeleteKey(true, "clients:"+(*r).RequestURI+
-                    ":freq:"+key.name[len("/"+key.privateKey):])
-            }
-        }
-    } else {
-        rcv := &receiver{process: make(chan []byte, 1), ws: ws, h: wsh.h,
-            name: (*r).RequestURI, privateKey: split[1],
-            shortname: split[2]}
-        rcv.h.receivers[rcv] = true
-        defer func() {
-            delete(rcv.h.receivers, rcv)
-            close(rcv.process)
-        }()
-        go rcv.processor()
-        rcv.reader()
-        log.Printf("Disconnected from: %s", (*r).RequestURI)
-
-        if db != dbNone {
-            wsh.h.dbw.SetRemove(true, "clients:list", (*r).RequestURI)
-            wsh.h.dbw.DeleteKey(true, "clients:"+(*r).RequestURI+":to",
-                "clients:"+(*r).RequestURI+":from",
-                "clients:"+(*r).RequestURI+":topic",
-                "clients:"+(*r).RequestURI+":type",
-                "clients:"+(*r).RequestURI+":stamp",
-                "clients:"+(*r).RequestURI+":msg",
-                "clients:"+(*r).RequestURI+":privateKey",
-                "clients:"+(*r).RequestURI+":freq")
-        }
-    }
-}
-
-
 func udpServer(address string, h *hub) {
-    serverAddr, err := net.ResolveUDPAddr("udp", addr)
+    serverAddr, err := net.ResolveUDPAddr("udp", address)
     if err != nil {
         panic(err)
     }
@@ -122,6 +41,8 @@ func udpServer(address string, h *hub) {
     if err != nil {
         panic(err)
     }
+    serverConn.SetReadBuffer(65535)
+    serverConn.SetWriteBuffer(65535)
     defer serverConn.Close()
 
     h.sendChannel = make(chan sendPacket, 5)
@@ -132,34 +53,46 @@ func udpServer(address string, h *hub) {
     for {
         n, addr, err := serverConn.ReadFromUDP(buf)
         if err != nil {
-            fmt.Println("Error: ", err)
+            fmt.Println("Error: UDP read: %v", err)
         }
         if strings.HasPrefix(string(buf[:n]), "CONNECT") {
-            split := strings.Split(buf[:n], ":")
-            privateKey = split[1]
-            name = split[2]
-            if _, ok := clientMap[privateKey]; !ok {
-                h.clientMap[privateKey] = make(map[string]client)
+            split := strings.Split(string(buf[:n]), ":")
+            privateKey := split[1]
+            name := split[2]
+            if _, ok := h.clientMap[privateKey]; !ok {
+                h.clientMap[privateKey] = make(map[string]*client)
             }
-            if _, ok := clientMap[privateKey][name]; !ok {
+            if _, ok := h.clientMap[privateKey][name]; !ok {
+                log.Println("New client:", privateKey + ":" + name)
                 cli := &client{addr: addr, process: make(chan []byte, 1),
-                    name: name, privateKey: privateKey}
+                name: name, privateKey: privateKey, h: h}
                 h.clientMap[privateKey][name] = cli
-                addrMap[addr.IP + ":" + string(addr.Port)] = cli
+                addrMap[string(addr.IP) + ":" + string(addr.Port)] = cli
+                if db != dbNone {
+                    h.dbw.SetAdd(true, "clients:list", name)
+                }
                 go cli.processor()
+            } else {
+                h.clientMap[privateKey][name].addr = addr
+                addrMap[string(addr.IP) + ":" + string(addr.Port)] = h.clientMap[privateKey][name]
             }
         } else {
-            select {
-            case addrMap[addr.IP + ":" + string(addr.Port)].process <- buf[:n]:
-            default:
+            if _, ok := addrMap[string(addr.IP) + ":" + string(addr.Port)]; ok {
+                select {
+                case addrMap[string(addr.IP) + ":" + string(addr.Port)].process <- append([]byte{}, buf[:n]...):
+                default:
+                }
             }
         }
     }
 }
 
-func sender(c *net.UDPConn, s chan sendPacket) {
+func sender(c *net.UDPConn, s <-chan sendPacket) {
     for message := range s {
-        c.WriteToUDP(s.data, s.addr)
+        _, err := c.WriteToUDP(message.data, message.addr)
+        if err != nil {
+            log.Printf("Error: UDP write: %v", err)
+        }
     }
 }
 
@@ -181,7 +114,7 @@ func main() {
     viper.AddConfigPath("/etc/canopy/")
     viper.SetConfigName("config")
     viper.SetDefault("db", dbNone)
-    err := viper.ReadInConfig()
+    viper.ReadInConfig()
     db = viper.GetString("db")
 
     h := newHub()
@@ -205,5 +138,5 @@ func main() {
     default:
         log.Println("No database specified.")
     }
-    udpServer(addr, h)
+    udpServer(*addr, h)
 }
