@@ -9,6 +9,7 @@ import (
     "net"
     "strings"
     "fmt"
+    "syscall"
 )
 
 type sendPacket struct {
@@ -43,6 +44,9 @@ func udpServer(address string, h *hub) {
     }
     serverConn.SetReadBuffer(65535)
     serverConn.SetWriteBuffer(65535)
+    file, _ := serverConn.File()
+    defer file.Close()
+    syscall.SetsockoptInt(int(file.Fd()), syscall.SOL_IP, 10, 0)
     defer serverConn.Close()
 
     h.sendChannel = make(chan sendPacket, 5)
@@ -59,11 +63,11 @@ func udpServer(address string, h *hub) {
             split := strings.Split(string(buf[:n]), ":")
             privateKey := split[1]
             name := split[2]
+            log.Println("New client:", privateKey + ":" + name)
             if _, ok := h.clientMap[privateKey]; !ok {
                 h.clientMap[privateKey] = make(map[string]*client)
             }
             if _, ok := h.clientMap[privateKey][name]; !ok {
-                log.Println("New client:", privateKey + ":" + name)
                 cli := &client{addr: addr, process: make(chan []byte, 1),
                 name: name, privateKey: privateKey, h: h}
                 h.clientMap[privateKey][name] = cli

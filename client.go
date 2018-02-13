@@ -7,7 +7,6 @@ import (
 	"io"
 	"regexp"
 	"strings"
-	"time"
 	"net"
 )
 
@@ -41,17 +40,17 @@ type description struct {
 // to the desired client senders.
 func (r *client) processor() {
 	lastTime := 0.0
-    for stay, timeout := true, time.After(10 * time.Second); stay; {
-        select {
-        case <-r.process:
-            stay = false
-        case <-timeout:
-            stay = false
-        default:
-            r.h.sendChannel <- sendPacket{addr: r.addr, data: []byte("HANDSHAKE")}
-            time.Sleep(500 * time.Millisecond)
-        }
-    }
+    // for stay, timeout := true, time.After(10 * time.Second); stay; {
+    //     select {
+    //     case <-r.process:
+    //         stay = false
+    //     case <-timeout:
+    //         stay = false
+    //     default:
+    //         r.h.sendChannel <- sendPacket{addr: r.addr, data: []byte("HANDSHAKE")}
+    //         time.Sleep(500 * time.Millisecond)
+    //     }
+    // }
 	for {
         msg := <- r.process
 		rdr, err := zlib.NewReader(bytes.NewBuffer(msg))
