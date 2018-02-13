@@ -4,24 +4,21 @@ import (
 	"bytes"
 	"compress/zlib"
 	"encoding/json"
-	"github.com/gorilla/websocket"
 	"io"
-	"log"
 	"regexp"
 	"strings"
-	"time"
+	"net"
 )
 
-type receiver struct {
-	ws         *websocket.Conn
+type client struct {
 	process    chan []byte
 	h          *hub
+	addr       *net.UDPAddr
 	name       string
-	shortname  string
 	privateKey string
-	to         []string
 	msgType    string
 	rcvFreq    float32
+	description string
 }
 
 type message struct {
@@ -38,14 +35,24 @@ type description struct {
 	Data string
 }
 
-// processor from receiver decompresses the packet and unmarshals the JSON
+// processor from client decompresses the packet and unmarshals the JSON
 // to retrieve destination information. It then forwards the original packet
 // to the desired client senders.
-func (r *receiver) processor() {
+func (r *client) processor() {
 	lastTime := 0.0
+    // for stay, timeout := true, time.After(10 * time.Second); stay; {
+    //     select {
+    //     case <-r.process:
+    //         stay = false
+    //     case <-timeout:
+    //         stay = false
+    //     default:
+    //         r.h.sendChannel <- sendPacket{addr: r.addr, data: []byte("HANDSHAKE")}
+    //         time.Sleep(500 * time.Millisecond)
+    //     }
+    // }
 	for {
-		msg := <-r.process
-		snd := sendChannel{r: r, data: msg}
+        msg := <- r.process
 		rdr, err := zlib.NewReader(bytes.NewBuffer(msg))
 		if err != nil {
 			break
@@ -58,12 +65,12 @@ func (r *receiver) processor() {
 		json.Unmarshal(decompressed[4:], &m)
 		//log.Println("To:", m.To)
 		// Ensure message is coming from correct client.
-		if m.From != r.shortname || m.PrivateKey != r.privateKey {
-			return
+		if m.From != r.name || m.PrivateKey != r.privateKey {
+		    continue
 		}
 		// Ensure messages are sent in order.
 		if m.Stamp < lastTime {
-			return
+		    continue
 		}
 		lastTime = m.Stamp
 		r.msgType = m.Type
@@ -71,18 +78,18 @@ func (r *receiver) processor() {
 		if split[len(split)-1] == "description" {
 			var d description
 			json.Unmarshal(m.Msg, &d)
-			if sender, ok := r.h.senderMap[r.privateKey][split[1]]; ok {
+			if sender, ok := r.h.clientMap[r.privateKey][split[1]]; ok {
 				sender.description = d.Data
 			}
 		}
-		for name := range r.h.senderMap[r.privateKey] {
+		for name := range r.h.clientMap[r.privateKey] {
 			if strings.HasPrefix(name, "canopy_leaflet_") {
 				m.To = append(m.To, name)
 			}
 		}
 		list := make([]string, 0)
 		for _, to := range m.To {
-			if sender, ok := r.h.senderMap[r.privateKey][to]; ok {
+			if sender, ok := r.h.clientMap[r.privateKey][to]; ok {
 				exists := false
 				for _, check := range list {
 					if check == to {
@@ -92,13 +99,14 @@ func (r *receiver) processor() {
 				}
 				if !exists {
 					list = append(list, to)
+                    snd := sendPacket{addr: sender.addr, data: append([]byte{}, msg...)}
 					select {
-					case sender.send <- snd:
+					case r.h.sendChannel <- snd:
 					default:
 					}
 				}
 			} else { // Regex
-				for name, sender := range r.h.senderMap[r.privateKey] {
+				for name, sender := range r.h.clientMap[r.privateKey] {
 					if name != m.From {
 						match, _ := regexp.MatchString(to, name)
 						if match {
@@ -111,8 +119,9 @@ func (r *receiver) processor() {
 							}
 							if !exists {
 								list = append(list, name)
+                                snd := sendPacket{addr: sender.addr, data: append([]byte{}, msg...)}
 								select {
-								case sender.send <- snd:
+								case r.h.sendChannel <- snd:
 								default:
 								}
 							}
@@ -121,9 +130,7 @@ func (r *receiver) processor() {
 				}
 			}
 		}
-		r.to = list
 		if db != dbNone {
-			r.h.dbw.AddKey(false, "clients:"+r.name+":to", strings.Join(r.to, " "))
 			r.h.dbw.AddKey(false, "clients:"+r.name+":from", m.From)
 			r.h.dbw.AddKey(false, "clients:"+r.name+":topic", m.Topic)
 			r.h.dbw.AddKey(false, "clients:"+r.name+":type", m.Type)
@@ -132,39 +139,4 @@ func (r *receiver) processor() {
 			r.h.dbw.AddKey(false, "clients:"+r.name+":privateKey", m.PrivateKey)
 		}
 	}
-}
-
-// reader from receiver continually polls the socket for new packets,
-// and then sends them to be processed. It also calculates read frequencies.
-func (r *receiver) reader() {
-	count := 0
-	lastTime := time.Now()
-	for {
-		_, message, err := r.ws.ReadMessage()
-		if err != nil {
-			log.Printf("[%s] ReadError: %s", r.name, err)
-			break
-		}
-		select {
-		case r.process <- message:
-		default:
-		}
-		//log.Printf("%s: %d", r.name, unsafe.Sizeof(message))
-		msg := make([]byte, 1)
-		err = r.ws.WriteMessage(websocket.BinaryMessage, msg)
-		if err != nil {
-			break
-		}
-		count++
-		if count == 20 {
-			r.rcvFreq = 20.0 * 1e9 / float32((time.Now().Sub(lastTime)))
-			lastTime = time.Now()
-			count = 0
-		}
-
-		if db != dbNone {
-			r.h.dbw.AddKey(false, "clients:"+r.name+":freq", r.rcvFreq)
-		}
-	}
-	r.ws.Close()
 }
