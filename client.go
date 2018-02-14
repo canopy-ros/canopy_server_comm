@@ -5,20 +5,24 @@ import (
 	"compress/zlib"
 	"encoding/json"
 	"io"
+	"net"
 	"regexp"
 	"strings"
-	"net"
+
+	"github.com/canopy-ros/canopy_server_comm/loggers"
+	log "github.com/sirupsen/logrus"
 )
 
 type client struct {
-	process    chan []byte
-	h          *hub
-	addr       *net.UDPAddr
-	name       string
-	privateKey string
-	msgType    string
-	rcvFreq    float32
+	process     chan []byte
+	h           *hub
+	addr        *net.UDPAddr
+	name        string
+	privateKey  string
+	msgType     string
+	rcvFreq     float32
 	description string
+	rateLoggers map[string]*loggers.RateLogger
 }
 
 type message struct {
@@ -40,19 +44,19 @@ type description struct {
 // to the desired client senders.
 func (r *client) processor() {
 	lastTime := 0.0
-    // for stay, timeout := true, time.After(10 * time.Second); stay; {
-    //     select {
-    //     case <-r.process:
-    //         stay = false
-    //     case <-timeout:
-    //         stay = false
-    //     default:
-    //         r.h.sendChannel <- sendPacket{addr: r.addr, data: []byte("HANDSHAKE")}
-    //         time.Sleep(500 * time.Millisecond)
-    //     }
-    // }
+	// for stay, timeout := true, time.After(10 * time.Second); stay; {
+	//     select {
+	//     case <-r.process:
+	//         stay = false
+	//     case <-timeout:
+	//         stay = false
+	//     default:
+	//         r.h.sendChannel <- sendPacket{addr: r.addr, data: []byte("HANDSHAKE")}
+	//         time.Sleep(500 * time.Millisecond)
+	//     }
+	// }
 	for {
-        msg := <- r.process
+		msg := <-r.process
 		rdr, err := zlib.NewReader(bytes.NewBuffer(msg))
 		if err != nil {
 			break
@@ -63,14 +67,23 @@ func (r *client) processor() {
 		decompressed := out.Bytes()
 		var m message
 		json.Unmarshal(decompressed[4:], &m)
+
+		if _, ok := r.rateLoggers[m.Topic]; !ok {
+			r.rateLoggers[m.Topic] = loggers.NewRateLogger(100)
+		}
+
+		r.rateLoggers[m.Topic].Log("Client frequency", log.Fields{
+			"topic": m.Topic,
+			"from":  m.From,
+		})
 		//log.Println("To:", m.To)
 		// Ensure message is coming from correct client.
 		if m.From != r.name || m.PrivateKey != r.privateKey {
-		    continue
+			continue
 		}
 		// Ensure messages are sent in order.
 		if m.Stamp < lastTime {
-		    continue
+			continue
 		}
 		lastTime = m.Stamp
 		r.msgType = m.Type
@@ -99,7 +112,7 @@ func (r *client) processor() {
 				}
 				if !exists {
 					list = append(list, to)
-                    snd := sendPacket{addr: sender.addr, data: append([]byte{}, msg...)}
+					snd := sendPacket{addr: sender.addr, data: append([]byte{}, msg...)}
 					select {
 					case r.h.sendChannel <- snd:
 					default:
@@ -119,7 +132,7 @@ func (r *client) processor() {
 							}
 							if !exists {
 								list = append(list, name)
-                                snd := sendPacket{addr: sender.addr, data: append([]byte{}, msg...)}
+								snd := sendPacket{addr: sender.addr, data: append([]byte{}, msg...)}
 								select {
 								case r.h.sendChannel <- snd:
 								default:
