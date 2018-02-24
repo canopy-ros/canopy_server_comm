@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/viper"
 )
 
+// SendPacket defines a packet to be sent
 type SendPacket struct {
     addr *net.UDPAddr
     data []byte

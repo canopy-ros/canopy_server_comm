@@ -13,6 +13,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// Client defines a client connection object
 type Client struct {
 	process    chan []byte
 	h          *hub
@@ -39,7 +40,9 @@ type description struct {
 	Data string
 }
 
+// DescriptionTopic is the topic name of the client description
 const DescriptionTopic = "description"
+// LeafletPrefix is the prefix of leaflet client names
 const LeafletPrefix = "canopy_leaflet_"
 
 // processor from client decompresses the packet and unmarshals the JSON
