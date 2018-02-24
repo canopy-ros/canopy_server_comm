@@ -3,7 +3,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"net"
 	"strings"
 	"syscall"
@@ -14,24 +13,24 @@ import (
 	"github.com/spf13/viper"
 )
 
-type sendPacket struct {
-	addr *net.UDPAddr
-	data []byte
+type SendPacket struct {
+    addr *net.UDPAddr
+    data []byte
 }
 
 // hub is a connection point between a network of senders and receivers.
 // Communication between senders and receivers is logged to a database
 // if a database writer is specified.
 type hub struct {
-	clientMap   map[string]map[string]*client
-	sendChannel chan sendPacket
+    clientMap   map[string]map[string]*Client
+    sendChannel chan SendPacket
 	dbw         DBWriter
 }
 
 // newHub creates a new hub object.
 func newHub() *hub {
 	return &hub{
-		clientMap: make(map[string]map[string]*client),
+		clientMap: make(map[string]map[string]*Client),
 	}
 }
 
@@ -51,8 +50,8 @@ func udpServer(address string, h *hub) {
 	syscall.SetsockoptInt(int(file.Fd()), syscall.SOL_IP, 10, 0)
 	defer serverConn.Close()
 
-	h.sendChannel = make(chan sendPacket, 5)
-	addrMap := make(map[string]*client)
+	h.sendChannel = make(chan SendPacket, 5)
+	addrMap := make(map[string]*Client)
 	go sender(serverConn, h.sendChannel)
 	buf := make([]byte, 65507)
 
@@ -61,26 +60,28 @@ func udpServer(address string, h *hub) {
 	for {
 		n, addr, err := serverConn.ReadFromUDP(buf)
 		if err != nil {
-			fmt.Println("Error: UDP read: %v", err)
+            log.WithFields(log.Fields{
+                "error": err,
+            }).Fatal("UDP read error")
 		}
 		if strings.HasPrefix(string(buf[:n]), "CONNECT") {
 			split := strings.Split(string(buf[:n]), ":")
 			privateKey := split[1]
 			name := split[2]
-			log.Println("New client:", privateKey+":"+name)
-			h.sendChannel <- sendPacket{addr: addr, data: []byte("HANDSHAKE")}
+            log.WithFields(log.Fields{
+                "privateKey": privateKey,
+                "name": name,
+            }).Info("New client")
+			h.sendChannel <- SendPacket{addr: addr, data: []byte("HANDSHAKE")}
 			if _, ok := h.clientMap[privateKey]; !ok {
-				h.clientMap[privateKey] = make(map[string]*client)
+				h.clientMap[privateKey] = make(map[string]*Client)
 			}
 			if _, ok := h.clientMap[privateKey][name]; !ok {
-				cli := &client{addr: addr, process: make(chan []byte, 1),
+				cli := &Client{addr: addr, process: make(chan []byte, 1),
 					name: name, privateKey: privateKey, h: h,
 					rateLoggers: make(map[string]*loggers.RateLogger)}
 				h.clientMap[privateKey][name] = cli
 				addrMap[string(addr.IP)+":"+string(addr.Port)] = cli
-				if db != dbNone {
-					h.dbw.SetAdd(true, "clients:list", name)
-				}
 				go cli.processor()
 			} else {
 				h.clientMap[privateKey][name].addr = addr
@@ -106,7 +107,7 @@ func udpServer(address string, h *hub) {
 	}
 }
 
-func sender(c *net.UDPConn, s <-chan sendPacket) {
+func sender(c *net.UDPConn, s <-chan SendPacket) {
 	rateLogger := loggers.NewRateLogger(100)
 	for message := range s {
 		_, err := c.WriteToUDP(message.data, message.addr)
@@ -114,7 +115,9 @@ func sender(c *net.UDPConn, s <-chan sendPacket) {
 		rateLogger.Log("Sender frequency", log.Fields{})
 
 		if err != nil {
-			log.Printf("Error: UDP write: %v", err)
+            log.WithFields(log.Fields{
+                "error": err,
+            }).Fatal("UDP write error")
 		}
 	}
 }

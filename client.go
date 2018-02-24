@@ -13,14 +13,14 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type client struct {
-	process     chan []byte
-	h           *hub
-	addr        *net.UDPAddr
-	name        string
-	privateKey  string
-	msgType     string
-	rcvFreq     float32
+type Client struct {
+	process    chan []byte
+	h          *hub
+	addr       *net.UDPAddr
+	name       string
+	privateKey string
+	msgType    string
+	rcvFreq    float32
 	description string
 	rateLoggers map[string]*loggers.RateLogger
 }
@@ -39,46 +39,42 @@ type description struct {
 	Data string
 }
 
+const DescriptionTopic = "description"
+const LeafletPrefix = "canopy_leaflet_"
+
 // processor from client decompresses the packet and unmarshals the JSON
 // to retrieve destination information. It then forwards the original packet
 // to the desired client senders.
-func (r *client) processor() {
+func (c *Client) processor() {
 	lastTime := 0.0
-	// for stay, timeout := true, time.After(10 * time.Second); stay; {
-	//     select {
-	//     case <-r.process:
-	//         stay = false
-	//     case <-timeout:
-	//         stay = false
-	//     default:
-	//         r.h.sendChannel <- sendPacket{addr: r.addr, data: []byte("HANDSHAKE")}
-	//         time.Sleep(500 * time.Millisecond)
-	//     }
-	// }
 	for {
-		msg := <-r.process
+        msg := <-c.process
 		rdr, err := zlib.NewReader(bytes.NewBuffer(msg))
 		if err != nil {
-			break
+            log.WithFields(log.Fields{
+                "error": err,
+            }).Fatal("Decompress error")
+			continue
 		}
 		var out bytes.Buffer
 		io.Copy(&out, rdr)
 		rdr.Close()
-		decompressed := out.Bytes()
+		decompressedRaw := out.Bytes()
+        decompressed := decompressedRaw[4:]
 		var m message
-		json.Unmarshal(decompressed[4:], &m)
+		json.Unmarshal(decompressed, &m)
 
-		if _, ok := r.rateLoggers[m.Topic]; !ok {
-			r.rateLoggers[m.Topic] = loggers.NewRateLogger(100)
+		if _, ok := c.rateLoggers[m.Topic]; !ok {
+			c.rateLoggers[m.Topic] = loggers.NewRateLogger(100)
 		}
 
-		r.rateLoggers[m.Topic].Log("Client frequency", log.Fields{
+		c.rateLoggers[m.Topic].Log("Client frequency", log.Fields{
 			"topic": m.Topic,
 			"from":  m.From,
 		})
-		//log.Println("To:", m.To)
+
 		// Ensure message is coming from correct client.
-		if m.From != r.name || m.PrivateKey != r.privateKey {
+		if m.From != c.name || m.PrivateKey != c.privateKey {
 			continue
 		}
 		// Ensure messages are sent in order.
@@ -86,23 +82,25 @@ func (r *client) processor() {
 			continue
 		}
 		lastTime = m.Stamp
-		r.msgType = m.Type
-		split := strings.Split(m.Topic, "/")
-		if split[len(split)-1] == "description" {
+		c.msgType = m.Type
+		splitTopic := strings.Split(m.Topic, "/")
+        topicName := splitTopic[len(splitTopic)-1]
+        clientName := splitTopic[1]
+		if topicName == DescriptionTopic {
 			var d description
 			json.Unmarshal(m.Msg, &d)
-			if sender, ok := r.h.clientMap[r.privateKey][split[1]]; ok {
+			if sender, ok := c.h.clientMap[c.privateKey][clientName]; ok {
 				sender.description = d.Data
 			}
 		}
-		for name := range r.h.clientMap[r.privateKey] {
-			if strings.HasPrefix(name, "canopy_leaflet_") {
+		for name := range c.h.clientMap[c.privateKey] {
+			if strings.HasPrefix(name, LeafletPrefix) {
 				m.To = append(m.To, name)
 			}
 		}
 		list := make([]string, 0)
 		for _, to := range m.To {
-			if sender, ok := r.h.clientMap[r.privateKey][to]; ok {
+			if sender, ok := c.h.clientMap[c.privateKey][to]; ok {
 				exists := false
 				for _, check := range list {
 					if check == to {
@@ -112,14 +110,14 @@ func (r *client) processor() {
 				}
 				if !exists {
 					list = append(list, to)
-					snd := sendPacket{addr: sender.addr, data: append([]byte{}, msg...)}
+					snd := SendPacket{addr: sender.addr, data: append([]byte{}, msg...)}
 					select {
-					case r.h.sendChannel <- snd:
+					case c.h.sendChannel <- snd:
 					default:
 					}
 				}
 			} else { // Regex
-				for name, sender := range r.h.clientMap[r.privateKey] {
+				for name, sender := range c.h.clientMap[c.privateKey] {
 					if name != m.From {
 						match, _ := regexp.MatchString(to, name)
 						if match {
@@ -132,9 +130,9 @@ func (r *client) processor() {
 							}
 							if !exists {
 								list = append(list, name)
-								snd := sendPacket{addr: sender.addr, data: append([]byte{}, msg...)}
+								snd := SendPacket{addr: sender.addr, data: append([]byte{}, msg...)}
 								select {
-								case r.h.sendChannel <- snd:
+								case c.h.sendChannel <- snd:
 								default:
 								}
 							}
@@ -142,14 +140,6 @@ func (r *client) processor() {
 					}
 				}
 			}
-		}
-		if db != dbNone {
-			r.h.dbw.AddKey(false, "clients:"+r.name+":from", m.From)
-			r.h.dbw.AddKey(false, "clients:"+r.name+":topic", m.Topic)
-			r.h.dbw.AddKey(false, "clients:"+r.name+":type", m.Type)
-			r.h.dbw.AddKey(false, "clients:"+r.name+":stamp", m.Stamp)
-			r.h.dbw.AddKey(false, "clients:"+r.name+":msg", m.Msg)
-			r.h.dbw.AddKey(false, "clients:"+r.name+":privateKey", m.PrivateKey)
 		}
 	}
 }
