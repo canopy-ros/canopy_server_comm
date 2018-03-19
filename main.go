@@ -40,7 +40,7 @@ const ConnectionBufferSize = 65535
 // RateLoggerRate defines the rate to log rates at
 const RateLoggerRate = 100
 
-// UdpServer sets up a UDP server and listens for connections
+// UDPServer sets up a UDP server and listens for connections
 func UDPServer(address string, hub *Hub) {
     serverConn := SetupConnection(address)
     defer serverConn.Close()
