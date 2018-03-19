@@ -41,7 +41,7 @@ const ConnectionBufferSize = 65535
 const RateLoggerRate = 100
 
 // UdpServer sets up a UDP server and listens for connections
-func UdpServer(address string, hub *Hub) {
+func UDPServer(address string, hub *Hub) {
     serverConn := SetupConnection(address)
     defer serverConn.Close()
 
@@ -186,5 +186,5 @@ func main() {
     default:
         log.Println("No database specified.")
     }
-    UdpServer(*addr, h)
+    UDPServer(*addr, h)
 }
