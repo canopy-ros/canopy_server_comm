@@ -145,7 +145,7 @@ func main() {
 	switch db {
 	case dbRedis:
 		log.Println("Initializing redis.")
-		c, err := redis.Dial("tcp", ":6379")
+		c, err := redis.Dial("tcp", "redis:6379")
 		if err != nil {
 			panic(err)
 		}
