@@ -10,15 +10,13 @@ env:
 
 before_install:
     - go get github.com/golang/lint/golint
-install:
+script:
     - golint -set_exit_status
     - go test -v
 
-script:
+before_deploy:
     - cd docker
     - docker build --tag "$IMAGE_NAME" .
-
-before_deploy:
     - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
     - docker tag "$IMAGE_NAME" "${IMAGE_NAME}:latest"
 deploy:
