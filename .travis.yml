@@ -2,8 +2,25 @@ language: go
 dist: trusty
 go:
     - 1.9.2
+services:
+    - docker
+env:
+    global:
+        - IMAGE_NAME=canopyros/canopy_server_comm
+
 before_install:
     - go get github.com/golang/lint/golint
-script:
+install:
     - golint -set_exit_status
     - go test -v
+
+script:
+    - cd docker
+    - docker build --tag "$IMAGE_NAME" .
+
+before_deploy:
+    - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+    - docker tag "$IMAGE_NAME" "${IMAGE_NAME}:latest"
+deploy:
+    - provider: script
+      script: docker push "${IMAGE_NAME}:latest"
